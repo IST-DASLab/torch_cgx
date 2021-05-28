@@ -1,0 +1,55 @@
+# QMPI
+
+QMPI is a pytorch extension adding a backend for pytorch distributed supporting allreduce of quantized buffers.
+It supports quantizations of float16, float32 to 1-8 bits.
+
+QMPI is based on MPI torch.distributed backend. The extension essentially only replaces allreduce primitive.
+
+## Quick Start
+
+### Prerequisites
+QMPI, as a pytorch extension, requires `pytorch>=1.6.0`.
+
+The compression is only supported for GPU-based buffers so either CUDA or ROCm is required.
+If CUDA or ROCm are installed not in the standard paths, set `[CUDA|ROCM]_HOME` or `[CUDA|ROCM]_PATH` accordingly. 
+
+As long as it is based on MPI, it requires OpenMPI with GPU support installed (other MPI implementations were not tested).
+
+### Install
+Set `MPI_HOME` environment variable to mpi home. In case of AMD GPU, set `QMPI_CUDA` to 0.
+```bash
+git clone https://github.com/IST-DASLab/pytorch_qmpi
+export MPI_HOME=/path/to/mpi
+python setup.py install
+```
+
+### Usage
+The only changes to the training script using pytorch distributed required
+ are importing the built extension and specifying `qmpi` as `torch.distributed.init_process_group` backend parameter.
+ 
+Example:
+``` python
+import torch
+import torch.distributed as dist
+import torch_qmpi
+
+dist.init_process_group('qmpi', init_method='env://', rank=args.local_rank)
+```
+
+## Tuning
+Qmpi can be tuned with the following environment variables:
+
+- `COMPRESSION_QUANTIZATION_BITS` - number of bits each value of buffer is quantized to (from 1 to 8). Default is 32 which means no quantization is applied.
+- `COMPRESSION_BUCKET_SIZE` - size of subarray into which buffer is split before quantization. Default is 512.
+- `COMPRESSION_SKIP_INCOMPLETE_BUCKETS` - boolean variable (0 or 1). After the splitting buffer into buckets, some values of buffer may remain. The variable tells quantization algorithm to compress or not to compress the remaining values. Default 0.
+- `COMPRESSION_MINIMAL_SIZE` - minimal size of buffer (number of elements) to compress. Default is 0 but in fact minimal size is forced to be not less than 16.
+- `FUSION_BUFFER_SIZE_MB`. QMPI is leveraging [Tensor Fusion](https://github.com/horovod/horovod#tensor-fusion), a performance feature introduced in Horovod. This feature batches small allreduce operations. This decreases a latency in Data Parallel training. The environment variable controls the size of maximal buffer (in MB) that is communicated within one iteration of allreduce algorithm. Default is 64. The variable must be set **before** loading the module.
+
+## Examples
+
+Basic examples are provided under the [example](example) folder.
+
+## Notes
+ - As Compression method, basic stochastic max-min uniform quantization function is used.
+ - Reduction algorithm: Scatter-Reduce-AllGather.
+ - Part of the source code is based on [Horovod](https://github.com/horovod/horovod) sources.

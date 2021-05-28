@@ -1,0 +1,109 @@
+import torch.distributed as dist
+import torch
+import os
+import unittest
+import warnings
+import qmpi_cpp
+import numpy as np
+
+def reduce_equal_tests(rank, world_size, device="cuda"):
+    sizes = [2, 8, 128, 1024]
+    tests = []
+    for dtype in [torch.float16, torch.float32]:
+        for size in sizes:
+            tests.append((
+                torch.tensor([rank + 1.0] * size, dtype=dtype, device=device),
+                torch.tensor([float(world_size * (world_size + 1) / 2)] * size, dtype=dtype, device=device)
+                )
+            )
+    return tests
+
+
+def reduce_nonequal_tests(rank, world_size, device="cuda"):
+    sizes = [128, 1024, 16384]
+    # sizes = [1024]
+    tests = []
+    bits = [2, 4, 8]
+    # bits = [2]
+    for bit in bits:
+        # for dtype in [torch.float16, torch.float32]:
+        for dtype in [torch.float32]:
+            for size in sizes:
+                arange = np.arange(-size / 2, size / 2, 1.0)
+                tests.append((
+                    torch.tensor((rank + 1) * arange, dtype=dtype, device=device),
+                    torch.tensor((world_size * (world_size + 1) / 2) * arange, dtype=dtype, device=device),
+                    bit
+                    )
+                )
+    return tests
+
+
+
+class QmpiTests(unittest.TestCase):
+
+    def __init__(self, *args, **kwargs):
+        super(QmpiTests, self).__init__(*args, **kwargs)
+        warnings.simplefilter('module')
+
+    def assertTensorEqual(self, t1, t2, msg=None):
+        self.assertIsInstance(t1, torch.Tensor, 'First argument is not a Tensor')
+        self.assertIsInstance(t2, torch.Tensor, 'Second argument is not a Tensor')
+        if not torch.equal(t1, t2):
+            self.fail("Tensors are not equal: {} != {}".format(t1, t2))
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.addTypeEqualityFunc(torch.Tensor, "assertTensorEqual")
+        assert "OMPI_COMM_WORLD_SIZE" in os.environ, "Launch with mpirun"
+        self.rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
+        self.world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
+        os.environ['MASTER_ADDR'] = '127.0.0.1'
+        os.environ['MASTER_PORT'] = '4040'
+        os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
+        dist.init_process_group(backend="qmpi",  init_method="env://", rank=self.rank)
+        torch.cuda.set_device(self.rank)
+
+    def tearDown(self) -> None:
+        dist.destroy_process_group()
+
+    def test_compressed_exact(self):
+        quantization_bits = [2, 4, 8]
+        tests = reduce_equal_tests(self.rank, self.world_size, device="cuda")
+        for q in quantization_bits:
+            os.environ["COMPRESSION_QUANTIZATION_BITS"] = str(q)
+            for (input, expected) in tests:
+                t = input.clone()
+                dist.all_reduce(t, op=dist.ReduceOp.SUM)
+                self.assertEqual(t, expected)
+        dist.barrier()
+
+
+    def test_compressed_non_exact(self):
+        tests = reduce_nonequal_tests(self.rank, self.world_size, device="cuda")
+        bucket_sizes = [64, 512, 2048]
+        for (input, expected, q) in tests:
+            os.environ["COMPRESSION_QUANTIZATION_BITS"] = str(q)
+            for bucket_size in bucket_sizes:
+                os.environ["COMPRESSION_BUCKET_SIZE"] = str(bucket_size)
+                t = input.clone()
+                dist.all_reduce(t, op=dist.ReduceOp.SUM)
+                size = t.numel()
+                coef = (self.world_size * (self.world_size + 1) / 2)
+                self.assertLess(torch.norm(t - expected, p=float("inf")).item(), 2 * min(bucket_size, size) / ((1 << q) - 1) * coef,
+                                "Parameters. bits {}, bucket_size: {}, buffer size: {}".format(q, bucket_size, size))
+        dist.barrier()
+
+
+    def test_uncompressed(self):
+        os.environ["COMPRESSION_QUANTIZATION_BITS"] = str(32)
+        tests = reduce_equal_tests(self.rank, self.world_size)
+        for (input, expected) in tests:
+            t = input.clone()
+            dist.all_reduce(t, op=dist.ReduceOp.SUM)
+            self.assertEqual(t, expected)
+        dist.barrier()
+
+
+if __name__ == "__main__":
+    unittest.main()
