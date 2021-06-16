@@ -1,5 +1,6 @@
 #pragma once
 #include "reducer.h"
+#include "communicator.h"
 
 namespace qmpi {
 namespace common {
@@ -20,8 +21,12 @@ private:
   int AllreduceDivisionUncompressed(int num_elements, int global_offset,
                         std::vector<at::Tensor> &tensors,
                         void *comm);
-
+  int AllReduceAlltoAll(int num_elements, int global_offset,
+                        std::vector<at::Tensor> &tensors,
+                        void *comm);
+private:
   gpuStream_t* streams_;
+  Communicator* communicator_;
 };
 
 } // namespace common

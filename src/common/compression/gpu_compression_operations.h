@@ -38,6 +38,11 @@ void init_rand_states(RandState* states, int num_elems, unsigned int seed,
 template<typename T>
 void add(int n, const T* x, T* y, T* sum, gpuStream_t stream);
 
+void half2float(Half* input, float* output, int numel, gpuStream_t stream);
+
+void float2half(float* input, Half* output, int numel, gpuStream_t stream);
+
+
 size_t get_curand_array_size(int num_elems);
 
 } // namespace gpu

@@ -3,13 +3,13 @@ import torch
 import os
 import unittest
 import warnings
-import qmpi_cpp
+import torch_qmpi
 import numpy as np
 
 def reduce_equal_tests(rank, world_size, device="cuda"):
-    sizes = [2, 8, 128, 1024]
+    sizes = [1, 2, 8, 128, 1024, 1000000]
     tests = []
-    for dtype in [torch.float16, torch.float32]:
+    for dtype in [torch.float16, torch.float32, torch.int32]:
         for size in sizes:
             tests.append((
                 torch.tensor([rank + 1.0] * size, dtype=dtype, device=device),
@@ -20,16 +20,15 @@ def reduce_equal_tests(rank, world_size, device="cuda"):
 
 
 def reduce_nonequal_tests(rank, world_size, device="cuda"):
-    sizes = [128, 1024, 16384]
-    # sizes = [1024]
+    sizes = [128, 1024, 1025, 16384, 1000000]
     tests = []
     bits = [2, 4, 8]
-    # bits = [2]
     for bit in bits:
-        # for dtype in [torch.float16, torch.float32]:
-        for dtype in [torch.float32]:
+        for dtype in [torch.float16, torch.float32]:
             for size in sizes:
                 arange = np.arange(-size / 2, size / 2, 1.0)
+                if dtype == torch.float16:
+                    arange *= 1e-3
                 tests.append((
                     torch.tensor((rank + 1) * arange, dtype=dtype, device=device),
                     torch.tensor((world_size * (world_size + 1) / 2) * arange, dtype=dtype, device=device),
@@ -37,7 +36,6 @@ def reduce_nonequal_tests(rank, world_size, device="cuda"):
                     )
                 )
     return tests
-
 
 
 class QmpiTests(unittest.TestCase):
@@ -50,7 +48,7 @@ class QmpiTests(unittest.TestCase):
         self.assertIsInstance(t1, torch.Tensor, 'First argument is not a Tensor')
         self.assertIsInstance(t2, torch.Tensor, 'Second argument is not a Tensor')
         if not torch.equal(t1, t2):
-            self.fail("Tensors are not equal: {} != {}".format(t1, t2))
+            self.fail("Tensors are not equal: {} != {}. {}".format(t1, t2, msg))
 
     def setUp(self) -> None:
         super().setUp()
@@ -65,6 +63,7 @@ class QmpiTests(unittest.TestCase):
         torch.cuda.set_device(self.rank)
 
     def tearDown(self) -> None:
+        dist.barrier()
         dist.destroy_process_group()
 
     def test_compressed_exact(self):
@@ -73,10 +72,10 @@ class QmpiTests(unittest.TestCase):
         for q in quantization_bits:
             os.environ["COMPRESSION_QUANTIZATION_BITS"] = str(q)
             for (input, expected) in tests:
-                t = input.clone()
-                dist.all_reduce(t, op=dist.ReduceOp.SUM)
-                self.assertEqual(t, expected)
-        dist.barrier()
+                for i in range(10):
+                    t = input.clone()
+                    dist.all_reduce(t, op=dist.ReduceOp.SUM)
+                    self.assertEqual(t, expected, "Parameters. bits {},buffer size: {}".format(q, t.numel()))
 
 
     def test_compressed_non_exact(self):
@@ -86,13 +85,13 @@ class QmpiTests(unittest.TestCase):
             os.environ["COMPRESSION_QUANTIZATION_BITS"] = str(q)
             for bucket_size in bucket_sizes:
                 os.environ["COMPRESSION_BUCKET_SIZE"] = str(bucket_size)
-                t = input.clone()
-                dist.all_reduce(t, op=dist.ReduceOp.SUM)
-                size = t.numel()
-                coef = (self.world_size * (self.world_size + 1) / 2)
-                self.assertLess(torch.norm(t - expected, p=float("inf")).item(), 2 * min(bucket_size, size) / ((1 << q) - 1) * coef,
-                                "Parameters. bits {}, bucket_size: {}, buffer size: {}".format(q, bucket_size, size))
-        dist.barrier()
+                for i in range(10):
+                    t = input.clone()
+                    dist.all_reduce(t, op=dist.ReduceOp.SUM)
+                    size = t.numel()
+                    coef = (self.world_size * (self.world_size + 1) / 2)
+                    self.assertLess(torch.norm(t - expected, p=float("inf")).item(), 2 * min(bucket_size, size) / ((1 << q) - 1) * coef,
+                                    "Parameters. bits {}, bucket_size: {}, buffer size: {}".format(q, bucket_size, size))
 
 
     def test_uncompressed(self):
@@ -102,7 +101,6 @@ class QmpiTests(unittest.TestCase):
             t = input.clone()
             dist.all_reduce(t, op=dist.ReduceOp.SUM)
             self.assertEqual(t, expected)
-        dist.barrier()
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@
 #include "mpi_allreduce_operations.h"
 
 #include <pybind11/chrono.h>
+#include <pybind11/pybind11.h>
 
 namespace qmpi {
 
@@ -211,7 +212,7 @@ class WorkMPI : public c10d::ProcessGroup::Work {
     py::object register_backend = module.attr("Backend").attr("register_backend");
     register_backend(QMPI_BACKEND_NAME, py::cpp_function(createProcessGroupQMPI));
   }
-
+  static void RegisterModel(std::vector<std::pair<std::string, int>>& model_parameters);
  protected:
   using WorkType =
   std::tuple<std::unique_ptr<WorkEntry>, c10::intrusive_ptr < WorkMPI>>;

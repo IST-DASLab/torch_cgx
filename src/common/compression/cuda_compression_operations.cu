@@ -1,19 +1,7 @@
 #include "cuda_compression_operations.h"
 #include "gpu_rand.h"
 #include "gpu_fp16_util.h"
-
-#define CUDA_CHECK(condition)                                                  \
-do {                                                                           \
-  cudaError_t cuda_result = condition;                                         \
-  if (cuda_result != cudaSuccess) {                                            \
-    printf("%s on line %i in %s returned: %s(code:%i)\n", #condition,          \
-           __LINE__, __FILE__, cudaGetErrorString(cuda_result),                \
-           cuda_result);                                                       \
-    throw std::runtime_error(                                                  \
-        std::string(#condition) + " on line " + std::to_string(__LINE__) +     \
-        " returned: " + cudaGetErrorString(cuda_result));                      \
-  }                                                                            \
-} while (0)
+#include "cuda_common.h"
 
 namespace qmpi {
 namespace common {
@@ -24,6 +12,22 @@ const bool VECTORIZE_DECOMPRESS = false;
 __global__ void _init_rand(unsigned int seed, RandState *states) {
   unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
   states[index] = xorshift128_init(seed * index);
+}
+
+__global__ void _float2half(float *input, Half *output, int numel) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
+  for (int i = index; i < numel; i += stride) {
+    output[i] = __float2half(input[i]);
+  }
+}
+
+__global__ void _half2float(Half *input, float *output, int numel) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
+  for (int i = index; i < numel; i += stride) {
+    output[i] = __half2float(input[i]);
+  }
 }
 
 template<typename T>
@@ -383,9 +387,14 @@ __global__ void UnpackArray(unsigned char *input,
         }
       } else {
         typename TypeToVectorType<T>::vector_union output_union;
-#pragma unroll
-        for (int j = 0; j < PACK_SIZE; j += 4) {
-#pragma unroll
+#pragma unroll(PACK_SIZE / TypeToVectorType<T>::num_values)
+        for (int j = 0; j < PACK_SIZE; j += TypeToVectorType<T>::num_values) {
+          typename TypeToVectorType<T>::vector_type *output_p =
+              reinterpret_cast<typename TypeToVectorType<T>::vector_type *>(
+                  &output[i * PACK_SIZE + j]);
+          if (ADD)
+            output_union.vec = *output_p;
+#pragma unroll TypeToVectorType<T>::num_values
           for (int k = 0; k < TypeToVectorType<T>::num_values; k++) {
             unsigned char encoded_value =
                 (value >> ((j + k) * BITS)) & (divisor - 1);
@@ -399,9 +408,6 @@ __global__ void UnpackArray(unsigned char *input,
               output_union.a[k] = d;
             }
           }
-          typename TypeToVectorType<T>::vector_type *output_p =
-              reinterpret_cast<typename TypeToVectorType<T>::vector_type *>(
-                  &output[i * PACK_SIZE + j]);
           *output_p = output_union.vec;
         }
       }
@@ -438,6 +444,22 @@ void CUDA_add(int n, const T *x, T *y, T *sum,
   int blocks = BLOCKS_PER_GRID(n, num_threads);
   _add<T><<<blocks, num_threads, 0, stream>>>(n, x, y, sum);
   CUDA_CHECK(cudaGetLastError());
+}
+
+void CUDA_half2float(Half *input,
+                     float *output,
+                     int numel,
+                     cudaStream_t stream) {
+  _half2float<<<numel, 1, 0, 0>>>(input, output, numel);
+  CUDA_CHECK(cudaStreamSynchronize(stream));
+}
+
+void CUDA_float2half(float *input,
+                     half *output,
+                     int numel,
+                     cudaStream_t stream) {
+  _float2half<<<numel, 1, 0, 0>>>(input, output, numel);
+  CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 template<typename T, bool EF>

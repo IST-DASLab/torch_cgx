@@ -18,9 +18,19 @@ void CUDA_dequantize_maxmin(unsigned char *input_data,
 template<typename T>
 void CUDA_add(int n, const T *x, T *y, T *sum, cudaStream_t stream);
 
-
 void CUDA_init_rand(RandState *states, int num_elems, unsigned int seed,
-                      cudaStream_t stream);
+                    cudaStream_t stream);
+
+void CUDA_half2float(Half *input,
+                     float *output,
+                     int numel,
+                     cudaStream_t stream);
+
+void CUDA_float2half(float *input,
+                     Half *output,
+                     int numel,
+                     cudaStream_t stream);
+
 } // namespace gpu
 } // namespace common
 } // namespace qmpi

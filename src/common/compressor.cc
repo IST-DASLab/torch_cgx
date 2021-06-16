@@ -6,9 +6,10 @@ namespace qmpi {
 namespace common {
 
 Compressor::Compressor(GPUContext *gpu_context) : gpu_context_(gpu_context) {
-  int fusion_size_mb =
+  unsigned int fusion_size_mb =
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
-  tensor_fusion_size_ = fusion_size_mb * 1024 * 1024;
+  tensor_fusion_size_ =
+      std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
 }
 
 void Compressor::ResetParamsFromEnv() {
@@ -96,12 +97,8 @@ size_t Compressor::Compress(
     auto tensor_data = ((unsigned char *) tensor.data_ptr()) + offset;
 
     compressed_size =
-        CompressBuffer(tensor_data,
-                       output,
-                       nullptr,
-                       nelem,
-                       tensor.scalar_type(),
-                       stream);
+        CompressBuffer(tensor_data, output, nullptr, nelem,
+                       tensor.scalar_type(), stream);
     offset_cumm += tensor.numel();
     output += compressed_size;
     total_compressed_size += compressed_size;
@@ -183,6 +180,62 @@ void Compressor::Add(int num_elements,
   }
 }
 
+void Compressor::Float2Half(unsigned char *input,
+                            unsigned char *output,
+                            int num_elements,
+                            gpuStream_t stream) {
+  gpu::float2half(reinterpret_cast<float *>(input),
+                  reinterpret_cast<gpu::Half *>(output),
+                  num_elements,
+                  stream);
+}
+
+void Compressor::Half2Float(unsigned char *input,
+                            unsigned char *output,
+                            int num_elements,
+                            gpuStream_t stream) {
+  gpu::half2float(reinterpret_cast<gpu::Half *>(input),
+                  reinterpret_cast<float *>(output),
+                  num_elements,
+                  stream);
+}
+
+size_t DummyCompressor::CompressBuffer(unsigned char *input,
+                                       unsigned char *output,
+                                       unsigned char *feedback,
+                                       int num_elems,
+                                       at::ScalarType dtype,
+                                       gpuStream_t stream) {
+  gpu_context_->MemcpyAsyncD2D(output,
+                               input,
+                               num_elems * utils::get_sizeof(dtype),
+                               stream);
+  return num_elems * utils::get_sizeof(dtype);
+}
+
+void DummyCompressor::DecompressBuffer(unsigned char *input,
+                                       unsigned char *output,
+                                       int num_elems,
+                                       at::ScalarType dtype,
+                                       bool add,
+                                       gpuStream_t stream) {
+  if (add) {
+    Compressor::Add(num_elems, output, input, output, dtype, stream);
+  } else {
+    gpu_context_->MemcpyAsyncD2D(output, input,
+                                 num_elems * utils::get_sizeof(dtype), stream);
+  }
+}
+
+size_t DummyCompressor::BufferSize(int num_elems, size_t element_size) {
+  return num_elems * element_size;
+}
+
+bool DummyCompressor::isEnabled(const at::Tensor &tensor) {
+//  return tensor.numel() > min_elems_to_compress_;
+  return false;
+}
+
 Quantizer::Quantizer(GPUContext *gpu_context)
     : Compressor(gpu_context) {
   size_t randstates_sizes = gpu::get_curand_array_size(tensor_fusion_size_);
@@ -202,11 +255,6 @@ void Quantizer::GetSizesAndOffsets(int num_elements, int world_size,
                                    const std::vector<at::Tensor> &tensors,
                                    std::vector<int> &offsets,
                                    std::vector<int> &sizes) {
-  if (default_config.quantization_bits == 32) {
-    Compressor::GetSizesAndOffsets(num_elements, world_size, tensors, offsets,
-                                   sizes);
-    return;
-  }
   int offset = 0;
   int num_per_node;
   auto it = tensors.begin();

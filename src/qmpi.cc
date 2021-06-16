@@ -225,7 +225,6 @@ ProcessGroupQMPI::~ProcessGroupQMPI() {
 void ProcessGroupQMPI::destroy() {
   std::unique_lock<std::mutex> lock(pgMutex_);
   queueConsumeCV_.wait(lock, [&] { return queue_.empty(); });
-
   // Queue is empty, signal stop
   stop_ = true;
 
@@ -262,7 +261,7 @@ void ProcessGroupQMPI::runLoop() {
     auto workTuple = std::move(queue_.front());
     queue_.pop();
     auto &workEntry = std::get<0>(workTuple);
-    works.push_back(std::move(std::get<1>(workTuple)));
+    works.push_back(std::get<1>(workTuple));
     int num_entries = 1;
     if (workEntry->fusable) {
       if (rank_ == 0) {
@@ -270,7 +269,9 @@ void ProcessGroupQMPI::runLoop() {
           handleNextFusableEntry(workEntry);
           num_entries++;
         }
+        lock.unlock();
         MPI_CHECK(MPI_Bcast(&num_entries, 1, MPI_INT, 0, pgComm_));
+        lock.lock();
       } else {
         lock.unlock();
         MPI_CHECK(MPI_Bcast(&num_entries, 1, MPI_INT, 0, pgComm_));
@@ -297,9 +298,13 @@ void ProcessGroupQMPI::runLoop() {
       workEntry->run(workEntry);
       for (auto &work: works)
         work->finish();
-    } catch (...) {
+    } catch (std::exception& e) {
       for (auto &work: works)
         work->finish(std::current_exception());
+    }
+    works.clear();
+    if (workEntry->fusable) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     lock.lock();
   }
@@ -345,6 +350,8 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
       or tensor.scalar_type() == at::kHalf) and
       opts.reduceOp == c10d::ReduceOp::SUM and
       tensor.device().type() == at::kCUDA;
+//      tensor.device().type() == at::kCUDA;
+//  bool do_compress = false;
   std::function<void(std::unique_ptr < WorkEntry > &)> runFunc =
       [opts, do_compress, this](std::unique_ptr<WorkEntry> &entry) {
         auto data = entry->src;
@@ -353,20 +360,19 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
         if (do_compress) {
           allreduce_operator->PerformOperation(data);
         } else {
-          for (auto &tensor: data) {
-            MPI_CHECK(MPI_Allreduce(
-                MPI_IN_PLACE,
-                tensor.data_ptr(),
-                tensor.numel(),
-                mpiDatatype.at(tensor.scalar_type()),
-                mpiOp.at(opts.reduceOp),
-                pgComm_));
-          }
+          MPI_CHECK(MPI_Allreduce(
+              MPI_IN_PLACE,
+              data[0].data_ptr(),
+              data[0].numel(),
+              mpiDatatype.at(data[0].scalar_type()),
+              mpiOp.at(opts.reduceOp),
+              pgComm_));
         }
       };
   auto entry = std::unique_ptr<WorkEntry>(
       new WorkEntry(&tensors, nullptr, std::move(runFunc)));
-  entry->fusable = do_compress;
+//  entry->fusable = do_compress;
+  entry->fusable = false;
   return enqueue(std::move(entry));
 }
 
@@ -828,9 +834,13 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allgather_base(
       "no support for allgather_base in MPI process group");
 }
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m
-) {
+void ProcessGroupQMPI::RegisterModel(std::vector<std::pair<std::string, int>>& model_parameters) {
+  MPIAllReduce_Operation::RegisterModel(model_parameters);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 m.def("createProcessGroupQMPI", &ProcessGroupQMPI::createProcessGroupQMPI);
+m.def("register_model", &ProcessGroupQMPI::RegisterModel);
 }
 
 } // namespace qmpi

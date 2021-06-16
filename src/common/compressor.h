@@ -60,7 +60,7 @@ public:
                                 at::ScalarType dtype,
                                 bool add,
                                 gpuStream_t stream) = 0;
-  virtual void GetSizesAndOffsets(int num_elements, int world_size,
+  static void GetSizesAndOffsets(int num_elements, int world_size,
                                   const std::vector<at::Tensor> &entries,
                                   std::vector<int> &offsets,
                                   std::vector<int> &sizes);
@@ -70,6 +70,9 @@ public:
            unsigned char *sum,
            at::ScalarType dtype,
            gpuStream_t stream);
+  void Float2Half(unsigned char* input, unsigned char* output, int num_elements, gpuStream_t stream);
+  void Half2Float(unsigned char* input, unsigned char* output, int num_elements, gpuStream_t stream);
+
   virtual bool isEnabled(const at::Tensor& tensor) = 0;
   virtual void ResetParamsFromEnv();
 protected:
@@ -82,14 +85,35 @@ protected:
 class Quantizer : public Compressor {
 public:
   Quantizer(GPUContext *gpu_context);
-  void GetSizesAndOffsets(int num_elements, int world_size,
+  static void GetSizesAndOffsets(int num_elements, int world_size,
                           const std::vector<at::Tensor> &tensors,
                           std::vector<int> &offsets,
-                          std::vector<int> &sizes) override;
+                          std::vector<int> &sizes);
   virtual void ResetParamsFromEnv() override;
 protected:
   gpu::RandState *rand_states_;
   std::unique_ptr<PersistentBuffer> cuda_states_buffer_;
+};
+
+class DummyCompressor : public Compressor {
+public:
+  DummyCompressor(GPUContext *gpu_context)
+      : Compressor(gpu_context) {}
+
+  size_t CompressBuffer(unsigned char *input,
+                        unsigned char *output,
+                        unsigned char *feedback,
+                        int num_elems,
+                        at::ScalarType dtype,
+                        gpuStream_t stream) override;
+  void DecompressBuffer(unsigned char *input,
+                        unsigned char *output,
+                        int num_elems,
+                        at::ScalarType dtype,
+                        bool add,
+                        gpuStream_t stream) override;
+  size_t BufferSize(int num_elems, size_t element_size) final;
+  bool isEnabled(const at::Tensor& tensor) override;
 };
 
 class MaxMinQuantizer : public Quantizer {

@@ -11,7 +11,11 @@ namespace qmpi {
 struct MPIAllReduce_Operation {
   MPIAllReduce_Operation();
   int PerformOperation(std::vector<at::Tensor> &tensors);
-
+  static void RegisterModel(std::vector<std::pair<std::string, int>>& model_parameters) {
+    for (auto rit = model_parameters.rbegin(); rit != model_parameters.rend(); rit++) {
+      model_parameters_.push_back(std::move(*rit));
+    }
+  }
 protected:
   common::GPUContext gpu_context_;
   common::MPIContext mpi_context_;
@@ -26,5 +30,7 @@ private:
                 bool do_compression);
   int performOperation(std::vector<at::Tensor> &tensors,
                        bool do_compression);
+  static std::vector<std::pair<std::string, int>> model_parameters_;
+  int counter;
 };
 } // namespace qmpi

@@ -21,8 +21,10 @@ size_t get_sizeof(at::ScalarType dtype) {
   if (dtype == at::kHalf) {
     return sizeof(float) / 2;
 
-  } else {
+  } else if (dtype == at::kFloat) {
     return sizeof(float);
+  } else {
+    throw std::runtime_error("Unknown type at get_sizeof");
   }
 }
 

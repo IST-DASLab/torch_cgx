@@ -67,7 +67,7 @@ model.cuda()
 
 optimizer = optim.SGD(model.parameters(), lr=0.01)
 
-model = DDP(model, device_ids=[args.local_rank])
+model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
 # Set up fixed fake data
 data = torch.randn(args.batch_size, 3, 224, 224)
