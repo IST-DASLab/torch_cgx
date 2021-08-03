@@ -5,6 +5,11 @@
 namespace qmpi {
 namespace common {
 
+std::set<std::string> Compressor::ignore_modules;
+std::unordered_map<std::string, CompressionLayerConfig>
+    Compressor::layers_configs;
+
+
 Compressor::Compressor(GPUContext *gpu_context) : gpu_context_(gpu_context) {
   unsigned int fusion_size_mb =
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
@@ -23,15 +28,31 @@ void Compressor::ResetParamsFromEnv() {
                MIN_SIZE_TO_COMPRESS);
 }
 
+CompressionLayerConfig &Compressor::GetLayerConfig(const std::string &name) {
+  auto it = layers_configs.find(name);
+  if (it != layers_configs.end()) {
+    auto &config = it->second;
+    config.quantization_bits = (config.quantization_bits > 0)
+                               ? config.quantization_bits
+                               : default_config.quantization_bits;
+    config.bucket_size = (config.bucket_size > 0)
+                         ? config.bucket_size
+                         : default_config.bucket_size;
+    config.skip_incomplete_buckets = default_config.skip_incomplete_buckets;
+    return config;
+  }
+  return default_config;
+}
+
 size_t Compressor::BufferSize(
     int chunk_num_elems,
-    const std::vector<at::Tensor> &tensors,
+    const std::vector<Layer> &layers,
     int fusion_offset) {
   int offset_cumm = 0;
   int nelem = 0;
   size_t sum_result = 0;
-  for (auto &tensor : tensors) {
-    nelem = tensor.numel();
+  for (auto &layer : layers) {
+    nelem = layer.numel();
     if (offset_cumm + nelem <= fusion_offset) {
       offset_cumm += nelem;
       continue;
@@ -53,15 +74,16 @@ size_t Compressor::BufferSize(
       nelem = fusion_offset + chunk_num_elems -
           std::max(offset_cumm, fusion_offset);
     }
-    sum_result += BufferSize(nelem, tensor.element_size());
-    offset_cumm += tensor.numel();
+    auto &config = GetLayerConfig(layer.name());
+    sum_result += BufferSize(nelem, layer.element_size(), config);
+    offset_cumm += layer.numel();
   }
   return sum_result;
 }
 
 size_t Compressor::Compress(
     unsigned char *output,
-    const std::vector<at::Tensor> &tensors,
+    const std::vector<Layer> &layers,
     int fusion_offset, int chunk_num_elems,
     gpuStream_t stream) {
   size_t total_compressed_size = 0;
@@ -70,8 +92,8 @@ size_t Compressor::Compress(
   int nelem = 0;
   int buffer_offset = 0;
   size_t compressed_size;
-  for (auto &tensor : tensors) {
-    nelem = tensor.numel();
+  for (auto &layer : layers) {
+    nelem = layer.numel();
     if (offset_cumm + nelem <= fusion_offset) {
       offset_cumm += nelem;
       continue;
@@ -84,7 +106,7 @@ size_t Compressor::Compress(
     if (offset_cumm < fusion_offset) {
       // If the first part of the entry is placed in the previous slice.
       nelem = offset_cumm + nelem - fusion_offset;
-      buffer_offset = tensor.numel() - nelem;
+      buffer_offset = layer.numel() - nelem;
     }
 
     if (std::max(offset_cumm, fusion_offset) + nelem >
@@ -93,13 +115,13 @@ size_t Compressor::Compress(
       nelem = fusion_offset + chunk_num_elems -
           std::max(offset_cumm, fusion_offset);
     }
-    auto offset = buffer_offset * tensor.element_size();
-    auto tensor_data = ((unsigned char *) tensor.data_ptr()) + offset;
-
+    auto offset = buffer_offset * layer.element_size();
+    auto data = ((unsigned char *) layer.data_ptr()) + offset;
+    auto &config = GetLayerConfig(layer.name());
     compressed_size =
-        CompressBuffer(tensor_data, output, nullptr, nelem,
-                       tensor.scalar_type(), stream);
-    offset_cumm += tensor.numel();
+        CompressBuffer(data, output, nullptr, nelem,
+                       layer.scalar_type(), config, stream);
+    offset_cumm += layer.numel();
     output += compressed_size;
     total_compressed_size += compressed_size;
   }
@@ -108,15 +130,15 @@ size_t Compressor::Compress(
 
 void Compressor::Decompress(
     unsigned char *input_data,
-    const std::vector<at::Tensor> &tensors,
+    const std::vector<Layer> &layers,
     int fusion_offset, int chunk_num_elems, bool add, gpuStream_t stream) {
   int offset_cumm = 0;
   int nelem = 0;
   int buffer_offset = 0;
   size_t cumm_decompressed = 0;
 
-  for (auto &tensor : tensors) {
-    nelem = tensor.numel();
+  for (auto &layer : layers) {
+    nelem = layer.numel();
     if (offset_cumm + nelem <= fusion_offset) {
       offset_cumm += nelem;
       continue;
@@ -128,7 +150,7 @@ void Compressor::Decompress(
       // If the first part of param group is placed in previous slice
       // depending on reduction algorithm.
       nelem = offset_cumm + nelem - fusion_offset;
-      buffer_offset = tensor.numel() - nelem;
+      buffer_offset = layer.numel() - nelem;
     }
     if (std::max(offset_cumm, fusion_offset) + nelem >
         fusion_offset + chunk_num_elems) {
@@ -136,18 +158,19 @@ void Compressor::Decompress(
       nelem = fusion_offset + chunk_num_elems -
           std::max(offset_cumm, fusion_offset);
     }
-    auto output = ((unsigned char *) tensor.data_ptr()) +
-        buffer_offset * tensor.element_size();
+    auto output = ((unsigned char *) layer.data_ptr()) +
+        buffer_offset * layer.element_size();
+    auto &config = GetLayerConfig(layer.name());
     DecompressBuffer(input_data + cumm_decompressed, output, nelem,
-                     tensor.scalar_type(), add, stream);
-    cumm_decompressed += BufferSize(nelem, tensor.element_size());
-    offset_cumm += tensor.numel();
+                     layer.scalar_type(), add, config, stream);
+    cumm_decompressed += BufferSize(nelem, layer.element_size(), config);
+    offset_cumm += layer.numel();
   }
 }
 
 void Compressor::GetSizesAndOffsets(
     int num_elements, int world_size,
-    const std::vector<at::Tensor> &tensors, std::vector<int> &offsets,
+    const std::vector<Layer> &layers, std::vector<int> &offsets,
     std::vector<int> &sizes) {
   int residue = num_elements % world_size;
   int num_elems_per_node = num_elements / world_size;
@@ -205,6 +228,7 @@ size_t DummyCompressor::CompressBuffer(unsigned char *input,
                                        unsigned char *feedback,
                                        int num_elems,
                                        at::ScalarType dtype,
+                                       const CompressionLayerConfig &config,
                                        gpuStream_t stream) {
   gpu_context_->MemcpyAsyncD2D(output,
                                input,
@@ -218,6 +242,7 @@ void DummyCompressor::DecompressBuffer(unsigned char *input,
                                        int num_elems,
                                        at::ScalarType dtype,
                                        bool add,
+                                       const CompressionLayerConfig &config,
                                        gpuStream_t stream) {
   if (add) {
     Compressor::Add(num_elems, output, input, output, dtype, stream);
@@ -227,21 +252,19 @@ void DummyCompressor::DecompressBuffer(unsigned char *input,
   }
 }
 
-size_t DummyCompressor::BufferSize(int num_elems, size_t element_size) {
+size_t DummyCompressor::BufferSize(int num_elems,
+                                   size_t element_size,
+                                   const CompressionLayerConfig &config) {
   return num_elems * element_size;
 }
 
-bool DummyCompressor::isEnabled(const at::Tensor &tensor) {
-//  return tensor.numel() > min_elems_to_compress_;
-  return false;
+bool DummyCompressor::isEnabled(const Layer &layer) {
+  return layer.numel() > min_elems_to_compress_;
+//  return false;
 }
 
 Quantizer::Quantizer(GPUContext *gpu_context)
     : Compressor(gpu_context) {
-  size_t randstates_sizes = gpu::get_curand_array_size(tensor_fusion_size_);
-  cuda_states_buffer_ = std::make_unique<PersistentBuffer>(randstates_sizes);
-  rand_states_ =
-      static_cast<gpu::RandState *>(cuda_states_buffer_->RawPointer());
 }
 
 void Quantizer::ResetParamsFromEnv() {
@@ -252,16 +275,16 @@ void Quantizer::ResetParamsFromEnv() {
 }
 
 void Quantizer::GetSizesAndOffsets(int num_elements, int world_size,
-                                   const std::vector<at::Tensor> &tensors,
+                                   const std::vector<Layer> &layers,
                                    std::vector<int> &offsets,
                                    std::vector<int> &sizes) {
   int offset = 0;
   int num_per_node;
-  auto it = tensors.begin();
+  auto it = layers.begin();
   int entry_offset = 0;
   int n_elem = std::min((int) it->numel(), num_elements);
   int cur_size = 0;
-  int align_unit = (tensors[0].scalar_type() == at::kHalf) ? 8 : 4;
+  int align_unit = (layers[0].scalar_type() == at::kHalf) ? 8 : 4;
   for (int rank = 0; rank < world_size; rank++) {
     num_per_node = num_elements / (world_size - rank);
     cur_size = 0;
@@ -269,7 +292,7 @@ void Quantizer::GetSizesAndOffsets(int num_elements, int world_size,
       if (n_elem <= num_per_node - cur_size) {
         cur_size += n_elem;
         it++;
-        if (it == tensors.end())
+        if (it == layers.end())
           break;
         n_elem = std::min((int) it->numel(), num_elements);
       } else {
@@ -289,13 +312,13 @@ void Quantizer::GetSizesAndOffsets(int num_elements, int world_size,
 
 size_t MaxMinQuantizer::CompressBuffer(
     unsigned char *input, unsigned char *output, unsigned char *feedback,
-    int num_elems, at::ScalarType dtype,
+    int num_elems, at::ScalarType dtype, const CompressionLayerConfig &config,
     gpuStream_t stream) {
   if (num_elems == 0)
     return 0;
-  const int bits = default_config.quantization_bits;
-  const int bucket_size = default_config.bucket_size;
-  const bool skip_incomplete = default_config.skip_incomplete_buckets;
+  const int bits = config.quantization_bits;
+  const int bucket_size = config.bucket_size;
+  const bool skip_incomplete = config.skip_incomplete_buckets;
   int num_elems_to_compress = num_elems;
   int residual_elems = 0;
   int compressed_size = 0;
@@ -314,7 +337,7 @@ size_t MaxMinQuantizer::CompressBuffer(
           rand_states_, stream);
     }
     compressed_size =
-        BufferSize(num_elems_to_compress, utils::get_sizeof(dtype));
+        BufferSize(num_elems_to_compress, utils::get_sizeof(dtype), config);
   }
   if (skip_incomplete and residual_elems > 0) {
     input += num_elems_to_compress * utils::get_sizeof(dtype);
@@ -327,14 +350,16 @@ size_t MaxMinQuantizer::CompressBuffer(
   return compressed_size;
 }
 
-void MaxMinQuantizer::DecompressBuffer(
-    unsigned char *input, unsigned char *output, int num_elems,
-    at::ScalarType dtype, bool add, gpuStream_t stream) {
+void MaxMinQuantizer::DecompressBuffer(unsigned char *input,
+                                       unsigned char *output, int num_elems,
+                                       at::ScalarType dtype, bool add,
+                                       const CompressionLayerConfig &config,
+                                       gpuStream_t stream) {
   if (num_elems == 0)
     return;
-  const int bits = default_config.quantization_bits;
-  const int bucket_size = default_config.bucket_size;
-  const bool skip_incomplete = default_config.skip_incomplete_buckets;
+  const int bits = config.quantization_bits;
+  const int bucket_size = config.bucket_size;
+  const bool skip_incomplete = config.skip_incomplete_buckets;
   int num_elems_to_decompress = num_elems;
   int residual_elems = 0;
   if (skip_incomplete) {
@@ -363,7 +388,7 @@ void MaxMinQuantizer::DecompressBuffer(
 
   if (skip_incomplete and residual_elems > 0) {
     int compressed_size =
-        BufferSize(num_elems_to_decompress, utils::get_sizeof(dtype));
+        BufferSize(num_elems_to_decompress, utils::get_sizeof(dtype), config);
     input += compressed_size;
     output += num_elems_to_decompress * utils::get_sizeof(dtype);
     if (add) {
@@ -387,12 +412,14 @@ void MaxMinQuantizer::DecompressBuffer(
 }
 
 size_t
-MaxMinQuantizer::BufferSize(int num_elems, size_t element_size) {
+MaxMinQuantizer::BufferSize(int num_elems,
+                            size_t element_size,
+                            const CompressionLayerConfig &config) {
   if (num_elems == 0)
     return 0;
-  const int bits = default_config.quantization_bits;
-  const int bucket_size = default_config.bucket_size;
-  const bool skip_incomplete = default_config.skip_incomplete_buckets;
+  const int bits = config.quantization_bits;
+  const int bucket_size = config.bucket_size;
+  const bool skip_incomplete = config.skip_incomplete_buckets;
   int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
   int residuals = 0;
   if (skip_incomplete) {
@@ -406,9 +433,26 @@ MaxMinQuantizer::BufferSize(int num_elems, size_t element_size) {
       residuals * element_size;
 }
 
-bool MaxMinQuantizer::isEnabled(const at::Tensor &tensor) {
-  return tensor.numel() > min_elems_to_compress_
-      and default_config.quantization_bits <= 8;
+bool MaxMinQuantizer::isEnabled(const Layer &layer) {
+  for (auto &excluded_mask: ignore_modules) {
+    if (layer.name().find(excluded_mask) != std::string::npos) {
+      return false;
+    }
+  }
+  auto &config = GetLayerConfig(layer.name());
+  return layer.numel() > min_elems_to_compress_
+      and config.quantization_bits <= 8;
+}
+
+void MaxMinQuantizer::Init(int element_size, gpuStream_t stream) {
+  int max_num_elems = tensor_fusion_size_ / element_size;
+  size_t randstates_sizes = gpu::get_curand_array_size(max_num_elems);
+  if (!cuda_states_buffer_) {
+    cuda_states_buffer_ = std::make_unique<PersistentBuffer>(randstates_sizes);
+    rand_states_ =
+        static_cast<gpu::RandState *>(cuda_states_buffer_->RawPointer());
+  }
+  gpu::init_rand_states(rand_states_, max_num_elems, time(NULL), stream);
 }
 
 } // namespace common

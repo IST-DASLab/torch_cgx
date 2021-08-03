@@ -23,9 +23,9 @@ struct SHMCommunicator : public Communicator {
   virtual int TestRecv(int rank) override;
 
 private:
-  struct cudaEventSync {
-    cudaEvent_t event;
-    cudaIpcEventHandle_t eventHandle;
+  struct gpuEventSync {
+    gpuEvent_t event;
+    gpuIpcEventHandle_t eventHandle;
     MPI_Request request;
     unsigned char dummy;
   };
@@ -48,16 +48,16 @@ private:
   // must be separated with MPI_Barrier.
   void sendInit(shmBuffer* resource, int peer_rank, size_t shm_size);
   void recvInit(shmBuffer* resource, int peer_rank, size_t shm_size);
-  // Initialize cudaIPC primitives.
-  void initEventSend(cudaEventSync* eventSync, int recv_rank,
+  // Initialize IPC primitives.
+  void initEventSend(gpuEventSync* eventSync, int recv_rank,
                      MPI_Request* request);
-  void initEventRecv(cudaEventSync* eventSync, int send_rank);
+  void initEventRecv(gpuEventSync* eventSync, int send_rank);
 
   static void freeBuffer(shmBuffer* buffer);
-  static void freeEventSync(cudaEventSync* eventSend);
+  void freeEventSync(gpuEventSync* eventSend);
 
-  std::unordered_map<int, std::pair<shmBuffer, cudaEventSync>> send_resources;
-  std::unordered_map<int, std::pair<shmBuffer, cudaEventSync>> recv_resources;
+  std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> send_resources;
+  std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> recv_resources;
   std::unordered_map<int, RecvRequest> recv_requests;
   bool initialized_ = false;
   MPI_Comm comm_;

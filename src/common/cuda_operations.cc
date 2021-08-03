@@ -23,44 +23,6 @@ namespace common {
 
 class GPUContext::impl {
 public:
-  cudaError_t GetGpuEvent(cudaEvent_t *event) {
-    int device;
-    auto status = cudaGetDevice(&device);
-    if (status != cudaSuccess) {
-      return status;
-    }
-
-    auto &mutex = cuda_events_mutex;
-    {
-      std::lock_guard<std::mutex> guard(mutex);
-      auto &queue = cuda_events[device];
-      if (!queue.empty()) {
-        *event = queue.front();
-        queue.pop();
-        return cudaSuccess;
-      }
-    }
-
-    return cudaEventCreateWithFlags(event, cudaEventDisableTiming);
-  }
-
-  cudaError_t ReleaseGpuEvent(cudaEvent_t event) {
-    int device;
-    auto status = cudaGetDevice(&device);
-    if (status != cudaSuccess) {
-      return status;
-    }
-
-    auto &mutex = cuda_events_mutex;
-    {
-      std::lock_guard<std::mutex> guard(mutex);
-      auto &queue = cuda_events[device];
-      queue.push(event);
-    }
-
-    return cudaSuccess;
-  }
-
   void ErrorCheck(std::string op_name, cudaError_t cuda_result) {
     if (cuda_result != cudaSuccess) {
       throw std::logic_error(
@@ -68,60 +30,50 @@ public:
     }
   }
 
-  void RecordEvent(std::queue<std::pair<std::string, cudaEvent_t>> &event_queue,
-                   std::string name,
-                   cudaStream_t &stream) {
-    cudaEvent_t event;
-    ErrorCheck("GetGpuEvent", GetGpuEvent(&event));
-    ErrorCheck("cudaEventRecord", cudaEventRecord(event, stream));
-    event_queue.emplace(name, event);
+  void EventCreate(cudaEvent_t *event) {
+    ErrorCheck("cudaEventCreateWithFlags",
+               cudaEventCreateWithFlags(event,
+                                        cudaEventDisableTiming
+                                            | cudaEventInterprocess));
   }
 
-  void WaitForEvents(std::queue<std::pair<std::string,
-                                          cudaEvent_t>> &event_queue,
-                     const std::vector<at::Tensor> &entries,
-                     const std::function<void()> &error_check_callback) {
-    while (!event_queue.empty()) {
-      std::string name;
-      cudaEvent_t event;
-      std::tie(name, event) = event_queue.front();
-      event_queue.pop();
+  void EventDestroy(cudaEvent_t &event) {
+    ErrorCheck("cudaEventDestroy", cudaEventDestroy(event));
+  }
 
-      // Check for async (networking) errors while waiting for the event to complete
-      cudaError_t cuda_result;
-      while (true) {
-        cuda_result = cudaEventQuery(event);
-        if (cuda_result == cudaSuccess) {
-          break;
-        }
+  void IpcGetEventHandle(cudaIpcEventHandle_t *eventHandle, cudaEvent_t &event) {
+    ErrorCheck("cudaIpcGetEventHandle",
+               cudaIpcGetEventHandle(eventHandle, event));
+  }
 
-        if (cuda_result != cudaErrorNotReady) {
-          throw std::logic_error(std::string("cudaEventQuery failed: ")
-                                     + cudaGetErrorString(cuda_result));
-        }
+  void IpcOpenEventHandle(cudaEvent_t *event, cudaIpcEventHandle_t &eventHandle) {
+    ErrorCheck("cudaIpcOpenEventHandle",
+               cudaIpcOpenEventHandle(event, eventHandle));
+  }
 
-        if (error_check_callback) {
-          error_check_callback();
-        }
-        std::this_thread::yield();
-      }
-
-      ErrorCheck("ReleaseGpuEvent", ReleaseGpuEvent(event));
-    }
+  void EventRecord(cudaEvent_t &event,
+                   cudaStream_t &stream) {
+    ErrorCheck("cudaEventRecord", cudaEventRecord(event, stream));
   }
 
   void StreamCreate(cudaStream_t *stream) {
-    int greatest_priority;
-    ErrorCheck("cudaDeviceGetStreamPriorityRange",
-               cudaDeviceGetStreamPriorityRange(NULL, &greatest_priority));
-    ErrorCheck("cudaStreamCreateWithPriority",
-               cudaStreamCreateWithPriority(stream,
-                                            cudaStreamNonBlocking,
-                                            greatest_priority));
+//    int greatest_priority;
+//    ErrorCheck("cudaDeviceGetStreamPriorityRange",
+//               cudaDeviceGetStreamPriorityRange(NULL, &greatest_priority));
+//    ErrorCheck("cudaStreamCreateWithPriority",
+//               cudaStreamCreateWithPriority(stream,
+//                                            cudaStreamNonBlocking,
+//                                            greatest_priority));
+    ErrorCheck("cudaStreamCreateWithFlags",
+               cudaStreamCreateWithFlags(stream, cudaStreamNonBlocking));
   }
 
   void StreamSynchronize(cudaStream_t stream) {
     ErrorCheck("cudaStreamSynchronize", cudaStreamSynchronize(stream));
+  }
+
+  void StreamWaitEvent(cudaStream_t stream, cudaEvent_t &event) {
+    ErrorCheck("cudaStreamWaitEvent", cudaStreamWaitEvent(stream, event, 0));
   }
 
   int GetDevice() {
@@ -168,6 +120,15 @@ public:
                                count,
                                cudaMemcpyDeviceToHost,
                                stream));
+  }
+
+  void DeviceSynchronize() {
+    ErrorCheck("cudaDeviceSynchronize", cudaDeviceSynchronize());
+  }
+
+  void MemcpyD2D(void *dst, const void *src, size_t count) {
+    ErrorCheck("cudaMemcpy",
+               cudaMemcpy(dst, src, count, cudaMemcpyDeviceToDevice));
   }
 
 private:

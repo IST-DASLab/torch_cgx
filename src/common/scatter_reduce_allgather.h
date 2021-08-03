@@ -12,17 +12,17 @@ public:
                                        int world_size);
 
   int AllreduceDivision(int num_elements, int global_offset,
-                        std::vector<at::Tensor> &tensors,
+                        std::vector<Layer> &tensors,
                         void *comm, bool do_compression) override;
 private:
   int AllreduceDivisionCompressed(int num_elements, int global_offset,
-                        std::vector<at::Tensor> &tensors,
+                        std::vector<Layer> &layers,
                         void *comm);
   int AllreduceDivisionUncompressed(int num_elements, int global_offset,
-                        std::vector<at::Tensor> &tensors,
+                        std::vector<Layer> &layers,
                         void *comm);
   int AllReduceAlltoAll(int num_elements, int global_offset,
-                        std::vector<at::Tensor> &tensors,
+                        std::vector<Layer> &layers,
                         void *comm);
 private:
   gpuStream_t* streams_;

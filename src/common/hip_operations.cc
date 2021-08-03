@@ -21,87 +21,37 @@ namespace qmpi {
 namespace common {
 
 class GPUContext::impl {
- public:
-  hipError_t GetGpuEvent(hipEvent_t* event) {
-    int device;
-    auto status = hipGetDevice(&device);
-    if (status != hipSuccess) {
-      return status;
-    }
-
-    auto& mutex = hip_events_mutex;
-    {
-      std::lock_guard<std::mutex> guard(mutex);
-      auto& queue = hip_events[device];
-      if (!queue.empty()) {
-        *event = queue.front();
-        queue.pop();
-        return hipSuccess;
-      }
-    }
-
-    return hipEventCreateWithFlags(event, hipEventDisableTiming);
-  }
-
-  hipError_t ReleaseGpuEvent(hipEvent_t event) {
-    int device;
-    auto status = hipGetDevice(&device);
-    if (status != hipSuccess) {
-      return status;
-    }
-
-    auto& mutex = hip_events_mutex;
-    {
-      std::lock_guard<std::mutex> guard(mutex);
-      auto& queue = hip_events[device];
-      queue.push(event);
-    }
-
-    return hipSuccess;
-  }
-
+public:
   void ErrorCheck(std::string op_name, hipError_t hip_result) {
     if (hip_result != hipSuccess) {
-      throw std::logic_error(std::string(op_name) + " failed: " + hipGetErrorString(hip_result));
+      throw std::logic_error(
+          std::string(op_name) + " failed: " + hipGetErrorString(hip_result));
     }
   }
 
-  void RecordEvent(std::queue<std::pair<std::string, hipEvent_t>>& event_queue, std::string name, hipStream_t& stream) {
-    hipEvent_t event;
-    ErrorCheck("GetGpuEvent", GetGpuEvent(&event));
+  void EventCreate(hipEvent_t *event) {
+    ErrorCheck("hipEventCreateWithFlags",
+               hipEventCreateWithFlags(event,
+                                       hipEventDisableTiming
+                                           | hipEventInterprocess));
+  }
+
+  void EventRecord(hipEvent_t &event, hipStream_t &stream) {
     ErrorCheck("hipEventRecord", hipEventRecord(event, stream));
-    event_queue.emplace(name, event);
   }
 
-  void WaitForEvents(std::queue<std::pair<std::string, hipEvent_t>>& event_queue,
-                     const std::vector<at::Tensor>& entries,
-                     const std::function<void()>& error_check_callback) {
-    while (!event_queue.empty()) {
-      std::string name;
-      hipEvent_t event;
-      std::tie(name, event) = event_queue.front();
-      event_queue.pop();
+  void EventDestroy(hipEvent_t &event) {
+    ErrorCheck("hipEventDestroy", hipEventDestroy(event));
+  }
 
-      // Check for async (networking) errors while waiting for the event to complete
-      hipError_t hip_result;
-      while (true) {
-        hip_result = hipEventQuery(event);
-        if (hip_result == hipSuccess) {
-          break;
-        }
+  void IpcGetEventHandle(hipIpcEventHandle_t *eventHandle, hipEvent_t &event) {
+    ErrorCheck("hipIpcGetEventHandle",
+               hipIpcGetEventHandle(eventHandle, event));
+  }
 
-        if (hip_result != hipErrorNotReady) {
-          throw std::logic_error(std::string("hipEventQuery failed: ") + hipGetErrorString(hip_result));
-        }
-
-        if (error_check_callback) {
-          error_check_callback();
-        }
-        std::this_thread::yield();
-      }
-
-      ErrorCheck("ReleaseGpuEvent", ReleaseGpuEvent(event));
-    }
+  void IpcOpenEventHandle(hipEvent_t *event, hipIpcEventHandle_t &eventHandle) {
+    ErrorCheck("hipIpcOpenEventHandle",
+               hipIpcOpenEventHandle(event, eventHandle));
   }
 
   void StreamCreate(hipStream_t *stream) {
@@ -109,7 +59,9 @@ class GPUContext::impl {
     ErrorCheck("hipDeviceGetStreamPriorityRange",
                hipDeviceGetStreamPriorityRange(NULL, &greatest_priority));
     ErrorCheck("hipStreamCreateWithPriority",
-               hipStreamCreateWithPriority(stream, hipStreamNonBlocking, greatest_priority));
+               hipStreamCreateWithPriority(stream,
+                                           hipStreamNonBlocking,
+                                           greatest_priority));
   }
 
   void StreamSynchronize(hipStream_t stream) {
@@ -126,24 +78,48 @@ class GPUContext::impl {
     ErrorCheck("hipSetDevice", hipSetDevice(device));
   }
 
-  void MemcpyAsyncD2D(void* dst, const void* src, size_t count, hipStream_t stream) {
-    ErrorCheck("hipMemcpyAsync", hipMemcpyAsync(dst, src, count, hipMemcpyDeviceToDevice, stream));
+  void MemcpyAsyncD2D(void *dst,
+                      const void *src,
+                      size_t count,
+                      hipStream_t stream) {
+    ErrorCheck("hipMemcpyAsync",
+               hipMemcpyAsync(dst,
+                              src,
+                              count,
+                              hipMemcpyDeviceToDevice,
+                              stream));
   }
 
-  void MemcpyAsyncH2D(void* dst, const void* src, size_t count, hipStream_t stream) {
-    ErrorCheck("hipMemcpyAsync", hipMemcpyAsync(dst, src, count, hipMemcpyHostToDevice, stream));
+  void MemcpyAsyncH2D(void *dst,
+                      const void *src,
+                      size_t count,
+                      hipStream_t stream) {
+    ErrorCheck("hipMemcpyAsync",
+               hipMemcpyAsync(dst, src, count, hipMemcpyHostToDevice, stream));
   }
 
-  void MemcpyAsyncD2H(void* dst, const void* src, size_t count, hipStream_t stream) {
-    ErrorCheck("hipMemcpyAsync", hipMemcpyAsync(dst, src, count, hipMemcpyDeviceToHost, stream));
+  void MemcpyAsyncD2H(void *dst,
+                      const void *src,
+                      size_t count,
+                      hipStream_t stream) {
+    ErrorCheck("hipMemcpyAsync",
+               hipMemcpyAsync(dst, src, count, hipMemcpyDeviceToHost, stream));
   }
 
-  void ScaleBufferImpl(const void* fused_input_data, void* buffer_data, int64_t num_elements,
-                       double scale_factor, DataType dtype, hipStream_t stream) {
-    throw std::logic_error("ScaleBuffer not implemented for AMD GPUs.");
+  void MemcpyAsyncD2D(void *dst, const void *src, size_t count) {
+    ErrorCheck("hipMemcpyAsync",
+               hipMemcpy(dst, src, count, hipMemcpyDeviceToHost));
   }
 
- private:
+  void DeviceSynchronize(void *dst, const void *src, size_t count) {
+    ErrorCheck("hipDeviceSynchronize", hipDeviceSynchronize());
+  }
+
+  void StreamWaitEvent(hipStream_t stream, hipEvent_t &event) {
+    ErrorCheck("hipStreamWaitEvent", hipStreamWaitEvent(stream, event, 0));
+  }
+
+private:
   // We reuse HIP events as it appears that their creation carries non-zero cost.
   std::unordered_map<int, std::queue<hipEvent_t>> hip_events;
   std::mutex hip_events_mutex;

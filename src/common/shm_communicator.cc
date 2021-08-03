@@ -1,6 +1,6 @@
 #include "shm_communicator.h"
 #include "shm_utils.h"
-#include "compression/cuda_common.h"
+#include "compression/gpu_common.h"
 #include "utils.h"
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
@@ -31,7 +31,13 @@ SHMCommunicator::~SHMCommunicator() {
 
 void SHMCommunicator::Init(int world_size, void *ctx) {
   if (initialized_) {
+//    unsigned int fusion_size_mb =
+//        utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
+//    unsigned int buf_size =
+//        std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
     for (auto &resource: send_resources) {
+//      void* buf = resource.second.first.devHostMem;
+//      cudaMemset(static_cast<char *>(buf), 0, buf_size);
       resource.second.first.shmOffset = 0;
     }
     for (auto &resource: recv_resources) {
@@ -81,18 +87,19 @@ void SHMCommunicator::Init(int world_size, void *ctx) {
   initialized_ = true;
 }
 
-#include "compression/cuda_common.h"
-
 void printDebug1(unsigned char* buf, int numel) {
   float* host_buf = new float[numel];
+#if HAVE_CUDA
   cudaMemcpy(host_buf, buf, numel * sizeof(float), cudaMemcpyDeviceToHost);
+  CUDA_CHECK(cudaGetLastError());
+#elif HAVE_ROCM
+  hipMemcpy(host_buf, buf, numel * sizeof(float), cudaMemcpyDeviceToHost);
+#endif
   for (int i = 0; i < numel; i++) {
     std::cout << host_buf[i] << " ";
   }
   std::cout << std::endl;
-  CUDA_CHECK(cudaGetLastError());
 }
-
 
 
 void SHMCommunicator::ISend(void *buf, size_t buf_size, int peer_rank,
@@ -105,29 +112,9 @@ void SHMCommunicator::ISend(void *buf, size_t buf_size, int peer_rank,
   //  In case of All-to-All and SRA reductions it works but may fail in case
   //  of other reduction schemes.
   assert(shm_buf.shmOffset + buf_size < shm_buf.shmSize);
-//  CUDA_CHECK(cudaMemcpyAsync(
-//      static_cast<char *>(shm_buf.devHostMem) + shm_buf.shmOffset, buf,
-//      buf_size, cudaMemcpyDeviceToDevice, stream));
-//  CUDA_CHECK(cudaMemcpyAsync(
-//      static_cast<char *>(shm_buf.hostMem) + shm_buf.shmOffset, buf,
-//      buf_size, cudaMemcpyDeviceToHost, stream));
-  CUDA_CHECK(cudaMemcpy(
-      static_cast<char *>(shm_buf.devHostMem) + shm_buf.shmOffset, buf,
-      buf_size, cudaMemcpyDeviceToDevice));
-//  CUDA_CHECK(cudaEventRecord(eventSync.event, stream));
-//  CUDA_CHECK(cudaStreamSynchronize(stream));
-//  if (rank_ == 0 and shm_buf.shmOffset == 0) {
-//    std::cout << "Sending ";
-//    printDebug1(static_cast<unsigned char*>(buf), 8);
-//
-//    float* buf_f = static_cast<float*>(shm_buf.hostMem);
-//    float* host_buf_f = static_cast<float*>((void*)host_buf);
-//    std::cout << "Sent side. Host shm buffer: ";
-//    for (int i = 0; i < 8; i++) {
-//      std::cout << buf_f[i] << " ";
-//    }
-//    std::cout << std::endl;
-//  }
+  gpu_context_->MemcpyAsyncD2D(static_cast<char *>(shm_buf.devHostMem) + shm_buf.shmOffset, buf,
+                               buf_size, stream);
+  gpu_context_->EventRecord(eventSync.event, stream);
   // Notify peer that data transfer has started.
   MPI_CHECK(MPI_Isend((void *) &eventSync.dummy, 1, MPI_UNSIGNED_CHAR,
                       peer_rank, 0, comm_, &eventSync.request));
@@ -161,35 +148,12 @@ int SHMCommunicator::TestRecv(int peer_rank) {
     return 0;
   // Wait on stream till data transfer is finished.
   auto &recv_request = recv_requests[peer_rank];
-//  CUDA_CHECK(cudaStreamWaitEvent(recv_request.stream, eventSync.event, 0));
-  CUDA_CHECK(cudaStreamSynchronize(recv_request.stream));
-//  if (rank_ == 2)
-//    printDebug((unsigned char*) shm_buf.devHostMem, recv_request.recv_size / sizeof(float));
-//  if (rank_ == 1 and shm_buf.shmOffset == 0) {
-//    float* buf = static_cast<float*>(shm_buf.hostMem);
-//    std::cout << "Recv side. Host shm buffer: ";
-//    for (int i = 0; i < 8; i++) {
-//      std::cout << buf[i] << " ";
-//    }
-//    std::cout << std::endl;
-//  }
-//  CUDA_CHECK(cudaMemcpyAsync(recv_request.dest,
-//                             static_cast<char *>(shm_buf.devHostMem)
-//                                 + shm_buf.shmOffset,
-//                             recv_request.recv_size,
-//                             cudaMemcpyDeviceToDevice,
-//                             recv_request.stream));
-  CUDA_CHECK(cudaMemcpyAsync(recv_request.dest,
-                             static_cast<char *>(shm_buf.hostMem)
-                                 + shm_buf.shmOffset,
-                             recv_request.recv_size,
-                             cudaMemcpyHostToDevice,
-                             recv_request.stream));
-//  MPI_Request request;
-//  char a;
-//  MPI_CHECK(MPI_Isend((void *) &a, 1, MPI_UNSIGNED_CHAR,
-//                      peer_rank, 0, comm_, &request));
-//  MPI_Wait(&request, MPI_STATUSES_IGNORE);
+  gpu_context_->StreamWaitEvent(recv_request.stream, eventSync.event);
+  gpu_context_->MemcpyAsyncD2D(recv_request.dest,
+                               static_cast<char *>(shm_buf.devHostMem)
+                                   + shm_buf.shmOffset,
+                               recv_request.recv_size,
+                               recv_request.stream);
   shm_buf.shmOffset += recv_request.recv_size;
   return 1;
 }
@@ -198,8 +162,6 @@ void SHMCommunicator::WaitAllSend() {
   for (auto &resource : send_resources) {
     auto &eventSync = resource.second.second;
     MPI_Wait(&eventSync.request, MPI_STATUSES_IGNORE);
-//    char a;
-//    MPI_CHECK(MPI_Recv(&a, 1, MPI_UNSIGNED_CHAR, resource.first, 0, comm_, MPI_STATUSES_IGNORE));
   }
 }
 
@@ -248,23 +210,21 @@ void SHMCommunicator::recvInit(shmBuffer *buffer,
   TRIV_CHECK(utils::shmUnlink(shmName));
 }
 
-void SHMCommunicator::initEventSend(cudaEventSync *eventSync,
+void SHMCommunicator::initEventSend(gpuEventSync *eventSync,
                                     int recv_rank, MPI_Request *request) {
-  CUDA_CHECK(cudaEventCreateWithFlags(
-      &eventSync->event, cudaEventDisableTiming | cudaEventInterprocess));
-  CUDA_CHECK(cudaIpcGetEventHandle(
-      (cudaIpcEventHandle_t * ) & eventSync->eventHandle, eventSync->event));
+  gpu_context_->EventCreate(&eventSync->event);
+  gpu_context_->IpcGetEventHandle(&eventSync->eventHandle, eventSync->event);
   MPI_CHECK(MPI_Isend((void *) (&eventSync->eventHandle),
                       sizeof(eventSync->eventHandle), MPI_UNSIGNED_CHAR,
                       recv_rank, 0, comm_, request));
 }
 
-void SHMCommunicator::initEventRecv(cudaEventSync *eventSync,
+void SHMCommunicator::initEventRecv(gpuEventSync *eventSync,
                                     int send_rank) {
   MPI_CHECK(MPI_Recv((void *) (&eventSync->eventHandle),
                      sizeof(eventSync->eventHandle), MPI_UNSIGNED_CHAR,
                      send_rank, 0, comm_, MPI_STATUSES_IGNORE));
-  CUDA_CHECK(cudaIpcOpenEventHandle(&eventSync->event, eventSync->eventHandle));
+  gpu_context_->IpcOpenEventHandle(&eventSync->event, eventSync->eventHandle);
   eventSync->request = MPI_Request();
 }
 
@@ -274,8 +234,8 @@ void SHMCommunicator::freeBuffer(shmBuffer *buffer) {
                              buffer->shmSize));
 }
 
-void SHMCommunicator::freeEventSync(cudaEventSync *eventSend) {
-  cudaEventDestroy(eventSend->event);
+void SHMCommunicator::freeEventSync(gpuEventSync *eventSend) {
+  gpu_context_->EventDestroy(eventSend->event);
 }
 
 } // namespace common

@@ -1,13 +1,13 @@
 #include "cuda_compression_operations.h"
 #include "gpu_rand.h"
 #include "gpu_fp16_util.h"
-#include "cuda_common.h"
+#include "gpu_common.h"
 
 namespace qmpi {
 namespace common {
 namespace gpu {
-const bool VECTORIZE_COMPRESS = false;
-const bool VECTORIZE_DECOMPRESS = false;
+const bool VECTORIZE_COMPRESS = true;
+const bool VECTORIZE_DECOMPRESS = true;
 
 __global__ void _init_rand(unsigned int seed, RandState *states) {
   unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -113,6 +113,25 @@ __device__ void find_meta_parallel(T *input, unsigned char *meta,
     meta_buf[0] = float2type<T>((max - min) / divisor);
   }
   __syncthreads();
+}
+
+template<typename T, int BITS>
+__global__ void find_meta(T *input, unsigned char *meta,
+                          const int num_elems, const int bucket_size) {
+  unsigned num_blocks = gridDim.x;
+  unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  unsigned int bid = blockIdx.x;
+  unsigned int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
+  unsigned int cur_bucket_size;
+  const int META_MULTIPLIER = 2;
+  for (unsigned int bucket_id = bid; bucket_id < num_buckets;
+       bucket_id += num_blocks) {
+    cur_bucket_size = umin(bucket_size, num_elems - bucket_id * bucket_size);
+    find_meta_parallel<T, BITS>(
+        input + bucket_size * bucket_id,
+        meta + META_MULTIPLIER * bucket_id * sizeof(T),
+        cur_bucket_size);
+  }
 }
 
 template<int BITS>
@@ -246,6 +265,91 @@ __device__ void CompressBucket(T *input, unsigned char *output,
         rand = GetRand(state);
         uint64_t encoded = MaxMinEncodeValue<T, EF>(
             input[idx], feedback_, meta_info, rand);
+        value += (encoded << (j * BITS));
+      }
+      for (unsigned int j = 0; j < BITS && i * BITS + j < num_char; j++) {
+        output[i * BITS + j] = value >> (PACK_SIZE * j) & 0xFF;
+      }
+    }
+  }
+}
+
+template<typename T, bool EF, int BITS>
+__global__ void pack_array(unsigned char *input_data, unsigned char *output_data,
+                         unsigned char *feedback_data, const int num_elems,
+                         const unsigned int bucket_size, RandState *states) {
+  unsigned num_blocks = gridDim.x;
+  unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  unsigned int bid = blockIdx.x;
+  unsigned int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
+  unsigned int cur_bucket_size;
+  unsigned char* meta_info = output_data;
+  T *input = (T *) input_data;
+  unsigned char *output;
+  const int META_MULTIPLIER = 2;
+  output = output_data + META_MULTIPLIER * sizeof(T) * num_buckets;
+
+  const unsigned int stride = gridDim.x * blockDim.x;
+  float rand;
+  int bucket_no;
+  int num_char = (BITS * num_elems + PACK_SIZE - 1) / PACK_SIZE;
+  T *feedback_;
+  RandState* state = &states[tid];
+  for (unsigned int i = tid; i < (num_elems + PACK_SIZE - 1) / PACK_SIZE;
+       i += stride) {
+    uint64_t value = 0;
+    if (VECTORIZE_COMPRESS) {
+      typename TypeToVectorType<T>::vector_union input_vector;
+      if (num_elems - i * PACK_SIZE >= PACK_SIZE) {
+#pragma unroll
+        for (unsigned int j = 0; j < PACK_SIZE;
+             j += TypeToVectorType<T>::num_values) {
+          int idx = i * PACK_SIZE + j;
+          input_vector.vec =
+              (reinterpret_cast<typename TypeToVectorType<T>::vector_type *>(
+                  input + idx))[0];
+#pragma unroll
+          for (int k = 0; k < TypeToVectorType<T>::num_values; k++) {
+            rand = GetRand(state);
+            if (EF)
+              feedback_ = ((T*) feedback_data) + idx + k;
+            bucket_no = (idx + k) / bucket_size;
+            uint64_t encoded = MaxMinEncodeValue<T, EF>(input_vector.a[k],
+                                                        feedback_,
+                                                        meta_info + META_MULTIPLIER * sizeof(T) * bucket_no,
+                                                        rand);
+            value += (encoded << ((j + k) * BITS));
+          }
+        }
+      } else {
+        for (unsigned int j = 0; j < num_elems - i * PACK_SIZE; j++) {
+          int idx = i * PACK_SIZE + j;
+          if (EF)
+            feedback_ = ((T*) feedback_data) + idx;
+          rand = GetRand(state);
+          bucket_no = idx / bucket_size;
+          unsigned encoded = MaxMinEncodeValue<T, EF>(
+              input[idx], feedback_, meta_info  + META_MULTIPLIER * sizeof(T) * bucket_no, rand);
+          value += (encoded << (j * BITS));
+        }
+      }
+      if (num_char - i * BITS < BITS) {
+        for (unsigned int j = 0; j < num_char - i * BITS; j++) {
+          output[i * BITS + j] = value >> (PACK_SIZE * j) & 0xFF;
+        }
+      } else {
+        pack_value<BITS>(value, output + i * BITS);
+      }
+    } else {
+      for (unsigned int j = 0; j < PACK_SIZE && i * PACK_SIZE + j < num_elems;
+           j++) {
+        int idx = i * PACK_SIZE + j;
+        if (EF)
+          feedback_ = ((T*) feedback_data) + idx;
+        rand = GetRand(state);
+        bucket_no = idx / bucket_size;
+        uint64_t encoded = MaxMinEncodeValue<T, EF>(
+            input[idx], feedback_, meta_info  + META_MULTIPLIER * sizeof(T) * bucket_no, rand);
         value += (encoded << (j * BITS));
       }
       for (unsigned int j = 0; j < BITS && i * BITS + j < num_char; j++) {
@@ -462,12 +566,81 @@ void CUDA_float2half(float *input,
   CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
+template<typename T, bool EF, int BITS>
+inline void QUANTIZE2(unsigned char *input_data, unsigned char *output_data,
+                     unsigned char *feedback_data, int num_elems,
+                     int bucket_size, RandState *states, cudaStream_t stream) {
+  int num_blocks =
+      umin((num_elems + 4 * bucket_size - 1) / (4 * bucket_size), MAX_NUMBER_OF_BLOCKS);
+  int num_threads = umin(THREADS_PER_BLOCK_COMPRESS, bucket_size);
+  int shared_memory_block_size = 2 * num_threads * sizeof(T);
+
+  find_meta<T, BITS><<<num_blocks, num_threads, shared_memory_block_size, stream>>>((T*)input_data, output_data, num_elems, bucket_size);
+  num_threads = THREADS_PER_BLOCK_DECOMPRESS;
+  num_blocks = BLOCKS_PER_GRID(num_elems / PACK_SIZE, num_threads);
+  pack_array<T, EF, BITS><<<num_blocks, num_threads, 0, stream>>>(input_data, output_data, feedback_data, num_elems, bucket_size,
+                                                                  states);
+}
+
+template<typename T, bool EF>
+inline void QUANTIZE1(unsigned char *input_data, unsigned char *output_data,
+                     unsigned char *feedback_data, int num_elems, int bits,
+                     int bucket_size, RandState *states, cudaStream_t stream) {
+  switch (bits) {
+    case 1:
+      QUANTIZE2<T, EF, 1>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 2:
+      QUANTIZE2<T, EF, 2>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 3:
+      QUANTIZE2<T, EF, 3>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 4:
+      QUANTIZE2<T, EF, 4>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 5:
+      QUANTIZE2<T, EF, 5>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 6:
+      QUANTIZE2<T, EF, 6>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 7:
+      QUANTIZE2<T, EF, 7>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    case 8:
+      QUANTIZE2<T, EF, 8>(
+          input_data, output_data, feedback_data, num_elems, bucket_size,
+          states, stream);
+      break;
+    default:printf("Wrong number of bits %i!!!\n", bits);
+  }
+  CUDA_CHECK(cudaGetLastError());
+}
+
+
 template<typename T, bool EF>
 inline void QUANTIZE(unsigned char *input_data, unsigned char *output_data,
                      unsigned char *feedback_data, int num_elems, int bits,
-                     int bucket_size, RandState *states, cudaStream_t stream,
-                     int num_blocks, int num_threads,
-                     int shared_memory_block_size) {
+                     int bucket_size, RandState *states, cudaStream_t stream) {
+  int num_blocks =
+      umin((num_elems + bucket_size - 1) / bucket_size, MAX_NUMBER_OF_BLOCKS);
+  int num_threads = umin(THREADS_PER_BLOCK_COMPRESS, bucket_size);
+  int shared_memory_block_size = 2 * MAX_THREADS_PER_BLOCK * sizeof(T);
   switch (bits) {
     case 1:
       quantize<T, EF, 1>
@@ -527,14 +700,9 @@ void CUDA_quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
                           unsigned char *feedback_data, int num_elems, int bits,
                           int bucket_size, RandState *states,
                           cudaStream_t stream) {
-  int num_blocks =
-      umin((num_elems + bucket_size - 1) / bucket_size, MAX_NUMBER_OF_BLOCKS);
-  int num_threads = umin(THREADS_PER_BLOCK_COMPRESS, bucket_size);
-  int shared_memory_block_size = 2 * MAX_THREADS_PER_BLOCK * sizeof(T);
-  QUANTIZE<T, false>(
+  QUANTIZE1<T, false>(
       input_data, output_data, feedback_data, num_elems, bits, bucket_size,
-      states, stream, num_blocks, num_threads,
-      shared_memory_block_size);
+      states, stream);
 }
 
 template<typename T, bool ADD>

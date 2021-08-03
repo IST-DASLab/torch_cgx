@@ -7,10 +7,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if HAVE_CUDA
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
-#include "compression/cuda_common.h"
-
+#elif HAVE_ROCM
+#include <hip/hip_runtime.h>
+#endif
+#include "compression/gpu_common.h"
 /*
  * This code is taken from NCCL library.
  */
@@ -84,17 +87,23 @@ int shmOpen(const char *shmname, const int shmsize, void **shmPtr,
   res = shm_setup(shmname, shmsize, &fd, &ptr, create);
   if (res > 0)
     goto sysError;
+#if HAVE_CUDA
   if ((res = cudaHostRegister(ptr, shmsize, cudaHostRegisterMapped)) !=
       cudaSuccess ||
       (res = cudaHostGetDevicePointer(devShmPtr, ptr, 0)) != cudaSuccess)
-    goto cudaError;
-
+    goto gpuError;
+#elif HAVE_ROCM
+  if ((res = hipHostRegister(ptr, shmsize, hipHostRegisterMapped)) !=
+      hipSuccess ||
+      (res = hipHostGetDevicePointer(devShmPtr, ptr, 0)) != hipSuccess)
+    goto gpuError;
+#endif
   *shmPtr = ptr;
   return 0;
 sysError:
   printf("Error while %s shared memory segment %s (size %d)\n",
          create ? "creating" : "attaching to", shmname, shmsize);
-cudaError:
+gpuError:
   if (fd != -1)
     close(fd);
   if (create)
@@ -112,7 +121,11 @@ int shmUnlink(const char *shmname) {
 }
 
 int shmClose(void *shmPtr, void *devShmPtr, const int shmsize) {
+#if HAVE_CUDA
   CUDA_CHECK(cudaHostUnregister(shmPtr));
+#elif HAVE_ROCM
+  HIP_CHECK(hipHostUnregister(shmPtr));
+#endif
   if (munmap(shmPtr, shmsize) != 0) {
     printf("munmap of shared memory failed\n");
     return 1;

@@ -8,6 +8,7 @@ namespace utils {
 const size_t ALIGNMENT_UNIT = 2 * sizeof(float);
 
 int GetIntEnvOrDefault(const char *env_variable, int default_value);
+float GetFloatEnvOrDefault(const char *env_variable, float default_value);
 
 void SetBoolFromEnv(const char* env, bool& val, bool value_if_set);
 

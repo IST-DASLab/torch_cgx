@@ -21,11 +21,13 @@
 using gpuError_t = cudaError_t;
 using gpuEvent_t = cudaEvent_t;
 using gpuStream_t = cudaStream_t;
+using gpuIpcEventHandle_t = cudaIpcEventHandle_t;
 #elif HAVE_ROCM
 #include <hip/hip_runtime_api.h>
 using gpuError_t = hipError_t;
 using gpuEvent_t = hipEvent_t;
 using gpuStream_t = hipStream_t;
+using gpuIpcEventHandle_t = hipIpcEventHandle_t;
 #endif
 #include <queue>
 #include <vector>
@@ -43,15 +45,18 @@ public:
 
   void ErrorCheck(std::string op_name, gpuError_t gpu_result);
 
-  void RecordEvent(std::queue<std::pair<std::string, gpuEvent_t>> &event_queue, std::string name,
-                   gpuStream_t &stream);
+  void EventCreate(gpuEvent_t* event);
+  void EventDestroy(gpuEvent_t& event);
+  void EventRecord(gpuEvent_t& event, gpuStream_t &stream);
 
-  void WaitForEvents(std::queue<std::pair<std::string, gpuEvent_t>> &event_queue,
-                     const std::vector<at::Tensor> &entries,
-                     const std::function<void()> &error_check_callback = nullptr);
+  void IpcGetEventHandle(gpuIpcEventHandle_t *eventHandle, gpuEvent_t &event);
+  void IpcOpenEventHandle(gpuEvent_t *event, gpuIpcEventHandle_t &eventHandle);
 
   void StreamCreate(gpuStream_t *stream);
   void StreamSynchronize(gpuStream_t stream);
+  void StreamWaitEvent(gpuStream_t& stream, gpuEvent_t& event);
+
+  void DeviceSynchronize();
 
   int GetDevice();
 
@@ -60,6 +65,8 @@ public:
   void MemcpyAsyncD2D(void *dst, const void *src, size_t count, gpuStream_t stream);
   void MemcpyAsyncH2D(void *dst, const void *src, size_t count, gpuStream_t stream);
   void MemcpyAsyncD2H(void *dst, const void *src, size_t count, gpuStream_t stream);
+
+  void MemcpyD2D(void *dst, const void* srt, size_t count);
 
 private:
   class impl;

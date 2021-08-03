@@ -4,6 +4,7 @@
 #include <map>
 
 #include <c10/core/DeviceGuard.h>
+#include <c10/cuda/CUDAStream.h>
 #include <mpi-ext.h> // Needed for CUDA-aware check
 
 namespace qmpi {
@@ -175,6 +176,9 @@ std::once_flag ProcessGroupQMPI::onceFlagInitMPI;
 
 void ProcessGroupQMPI::mpiExit() {
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+  if (mpiDatatype.find(at::kHalf) != mpiDatatype.end()) {
+    MPI_Type_free(&mpiDatatype[at::kHalf]);
+  }
   MPI_CHECK(MPI_Finalize());
 }
 
@@ -243,16 +247,6 @@ void ProcessGroupQMPI::abort() {
 
 void ProcessGroupQMPI::runLoop() {
   std::unique_lock<std::mutex> lock(pgMutex_);
-  std::vector<c10::intrusive_ptr<WorkMPI>> works;
-  auto handleNextFusableEntry =
-      [this, &works](std::unique_ptr<WorkEntry> &workEntry) {
-        auto nextWorkTuple = std::move(queue_.front());
-        auto &nextWorkEntry = std::get<0>(nextWorkTuple);
-        works.push_back(std::move(std::get<1>(nextWorkTuple)));
-        assert(nextWorkEntry->fusable);
-        workEntry->src.push_back(nextWorkEntry->src[0]);
-        queue_.pop();
-      };
   while (!stop_) {
     if (queue_.empty()) {
       queueProduceCV_.wait(lock);
@@ -261,50 +255,14 @@ void ProcessGroupQMPI::runLoop() {
     auto workTuple = std::move(queue_.front());
     queue_.pop();
     auto &workEntry = std::get<0>(workTuple);
-    works.push_back(std::get<1>(workTuple));
-    int num_entries = 1;
-    if (workEntry->fusable) {
-      if (rank_ == 0) {
-        while (!queue_.empty()) {
-          handleNextFusableEntry(workEntry);
-          num_entries++;
-        }
-        lock.unlock();
-        MPI_CHECK(MPI_Bcast(&num_entries, 1, MPI_INT, 0, pgComm_));
-        lock.lock();
-      } else {
-        lock.unlock();
-        MPI_CHECK(MPI_Bcast(&num_entries, 1, MPI_INT, 0, pgComm_));
-        lock.lock();
-        // One entry is already taken from queue.
-        num_entries--;
-        while (!queue_.empty() and num_entries > 0) {
-          handleNextFusableEntry(workEntry);
-          num_entries--;
-        }
-        // if there was not enough entries in queue
-        while (num_entries > 0) {
-          queueProduceCV_.wait(lock);
-          while (!queue_.empty() and num_entries > 0) {
-            handleNextFusableEntry(workEntry);
-            num_entries--;
-          }
-        }
-      }
-    }
+    auto& work = std::get<1>(workTuple);
     lock.unlock();
     queueConsumeCV_.notify_one();
     try {
       workEntry->run(workEntry);
-      for (auto &work: works)
-        work->finish();
+      work->finish();
     } catch (std::exception& e) {
-      for (auto &work: works)
-        work->finish(std::current_exception());
-    }
-    works.clear();
-    if (workEntry->fusable) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      work->finish(std::current_exception());
     }
     lock.lock();
   }
@@ -329,6 +287,15 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::broadcast(
         auto data = (entry->src)[0];
         c10::DeviceGuard guard(data.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_Datatype dtype;
+        if (mpiDatatype.find(data.scalar_type()) != mpiDatatype.end())
+          dtype = mpiDatatype.at(data.scalar_type());
+        else {
+          assert(data.scalar_type() == at::kHalf);
+          MPI_CHECK(MPI_Type_contiguous(2, MPI_BYTE, &dtype));
+          MPI_CHECK(MPI_Type_commit(&dtype));
+          mpiDatatype[data.scalar_type()] = dtype;
+        }
         MPI_CHECK(MPI_Bcast(
             data.data_ptr(),
             data.numel(),
@@ -354,25 +321,29 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
 //  bool do_compress = false;
   std::function<void(std::unique_ptr < WorkEntry > &)> runFunc =
       [opts, do_compress, this](std::unique_ptr<WorkEntry> &entry) {
-        auto data = entry->src;
-        c10::DeviceGuard guard(data[0].device());
+        auto& bucket = entry->src[0];
+        c10::DeviceGuard guard(bucket.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        auto torch_stream = c10::cuda::getCurrentCUDAStream(bucket.get_device());
+//        cudaStreamSynchronize(torch_stream);
+        torch_stream.synchronize();
         if (do_compress) {
-          allreduce_operator->PerformOperation(data);
+//          if (rank_ == 0) {
+//            std::cout << "Bucket size: " << bucket.numel() << std::endl;
+//          }
+          allreduce_operator->PerformOperation(bucket);
         } else {
           MPI_CHECK(MPI_Allreduce(
               MPI_IN_PLACE,
-              data[0].data_ptr(),
-              data[0].numel(),
-              mpiDatatype.at(data[0].scalar_type()),
+              bucket.data_ptr(),
+              bucket.numel(),
+              mpiDatatype.at(bucket.scalar_type()),
               mpiOp.at(opts.reduceOp),
               pgComm_));
         }
       };
   auto entry = std::unique_ptr<WorkEntry>(
       new WorkEntry(&tensors, nullptr, std::move(runFunc)));
-//  entry->fusable = do_compress;
-  entry->fusable = false;
   return enqueue(std::move(entry));
 }
 
@@ -834,13 +805,20 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allgather_base(
       "no support for allgather_base in MPI process group");
 }
 
-void ProcessGroupQMPI::RegisterModel(std::vector<std::pair<std::string, int>>& model_parameters) {
+MPI_Datatype ProcessGroupQMPI::float16_type;
+
+void RegisterModel(std::vector<std::pair<std::string, int>>& model_parameters) {
   MPIAllReduce_Operation::RegisterModel(model_parameters);
+}
+
+void ExcludeLayer(const std::string& layer_name) {
+  MPIAllReduce_Operation::ExcludeLayer(layer_name);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 m.def("createProcessGroupQMPI", &ProcessGroupQMPI::createProcessGroupQMPI);
-m.def("register_model", &ProcessGroupQMPI::RegisterModel);
+m.def("register_model", &RegisterModel);
+m.def("exclude_layer", &ExcludeLayer);
 }
 
 } // namespace qmpi

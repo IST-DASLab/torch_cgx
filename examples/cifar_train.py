@@ -14,8 +14,6 @@ import torch.distributed as dist
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from apex.fp16_utils import *
-from apex import amp
 
 CIFAR100_TRAIN_MEAN = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
 CIFAR100_TRAIN_STD = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
@@ -148,6 +146,12 @@ else:
     num_classes = 10
 model = models.resnet18(num_classes=num_classes)
 
+if args.dist_backend == 'qmpi':
+    layers = [(name, p.numel()) for name, p in model.named_parameters()]
+    torch_qmpi.register_model(layers)
+    torch_qmpi.exclude_layer("bn")
+    torch_qmpi.exclude_layer("bias")
+
 if args.cuda:
     # Move model to GPU.
     model.cuda()
@@ -156,8 +160,6 @@ if args.cuda:
 optimizer = optim.SGD(model.parameters(),
                       lr=args.base_lr,
                       momentum=args.momentum, weight_decay=args.wd)
-# model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-# model = DDP(model, hvd_dist=True, allreduce_always_fp32=True)
 if args.distributed:
     model = DDP(model, device_ids=[local_rank])
 
@@ -194,8 +196,6 @@ def train(epoch):
             train_loss.update(loss)
             t.set_postfix({'loss': train_loss.avg.item(),
                            'accuracy': 100. * train_accuracy.avg.item()})
-            # with amp.scale_loss(loss, optimizer) as scaled_loss:
-            #     scaled_loss.backward()
             loss.backward()
             optimizer.step()
             t.update(1)
@@ -244,6 +244,8 @@ class Metric(object):
 
 num_images = len(train_loader)
 for epoch in range(0, args.epochs):
+    if args.world_size > 0:
+        train_sampler.set_epoch(epoch)
     # start_time = time.time()
     train(epoch)
     # elapsed_time = time.time() - start_time

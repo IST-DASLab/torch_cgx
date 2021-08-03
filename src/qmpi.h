@@ -33,7 +33,7 @@ struct WorkEntry {
       std::vector<at::Tensor> *srcPtr,
       std::vector<at::Tensor> *dstPtr,
       std::function<void(std::unique_ptr<WorkEntry> &)> run)
-      : run(run), fusable(false) {
+      : run(run) {
     if (srcPtr) {
       src = *srcPtr;
     }
@@ -52,9 +52,6 @@ struct WorkEntry {
   std::vector<at::Tensor> dst;
   // src rank returned, for recv only
   int *srcRank = nullptr;
-  // If the src vector can be merged with tensors from other entries,
-  // for allreduce only
-  bool fusable;
   std::function<void(std::unique_ptr<WorkEntry> &)> run;
 };
 
@@ -212,8 +209,11 @@ class WorkMPI : public c10d::ProcessGroup::Work {
     py::object register_backend = module.attr("Backend").attr("register_backend");
     register_backend(QMPI_BACKEND_NAME, py::cpp_function(createProcessGroupQMPI));
   }
-  static void RegisterModel(std::vector<std::pair<std::string, int>>& model_parameters);
- protected:
+
+  // Support float16 in MPI
+  static MPI_Datatype float16_type;
+
+protected:
   using WorkType =
   std::tuple<std::unique_ptr<WorkEntry>, c10::intrusive_ptr < WorkMPI>>;
   // Worker thread loop
@@ -243,6 +243,7 @@ class WorkMPI : public c10d::ProcessGroup::Work {
 
   MPI_Comm pgComm_;
   std::unique_ptr<MPIAllReduce_Operation> allreduce_operator;
+
 };
 
 } // namespace qmpi

@@ -6,18 +6,26 @@ void GPUContext::ErrorCheck(std::string op_name, gpuError_t gpu_result) {
   pimpl->ErrorCheck(op_name, gpu_result);
 }
 
-void GPUContext::RecordEvent(std::queue<std::pair<std::string,
-                                                  gpuEvent_t>> &event_queue,
-                             std::string name,
-                             gpuStream_t &stream) {
-  pimpl->RecordEvent(event_queue, name, stream);
+void GPUContext::EventCreate(gpuEvent_t *event) {
+  pimpl->EventCreate(event);
 }
 
-void GPUContext::WaitForEvents(std::queue<std::pair<std::string,
-                                                    gpuEvent_t>> &event_queue,
-                               const std::vector<at::Tensor> &tensors,
-                               const std::function<void()> &error_check_callback) {
-  pimpl->WaitForEvents(event_queue, tensors, error_check_callback);
+void GPUContext::EventDestroy(gpuEvent_t &event) {
+  pimpl->EventDestroy(event);
+}
+
+void GPUContext::EventRecord(gpuEvent_t &event,
+                             gpuStream_t &stream) {
+  pimpl->EventRecord(event, stream);
+}
+
+void GPUContext::IpcGetEventHandle(gpuIpcEventHandle_t *eventHandle, gpuEvent_t &event) {
+  pimpl->IpcGetEventHandle(eventHandle, event);
+}
+
+void GPUContext::IpcOpenEventHandle(gpuEvent_t *event,
+                                   gpuIpcEventHandle_t &eventHandle) {
+  pimpl->IpcOpenEventHandle(event, eventHandle);
 }
 
 void GPUContext::StreamCreate(gpuStream_t *stream) {
@@ -57,3 +65,16 @@ void GPUContext::MemcpyAsyncD2H(void *dst,
   pimpl->MemcpyAsyncD2H(dst, src, count, stream);
 }
 
+void GPUContext::MemcpyD2D(void *dst,
+                           const void *src,
+                           size_t count) {
+  pimpl->MemcpyD2D(dst, src, count);
+}
+
+void GPUContext::DeviceSynchronize() {
+  pimpl->DeviceSynchronize();
+}
+
+void GPUContext::StreamWaitEvent(gpuStream_t &stream, gpuEvent_t &event) {
+  pimpl->StreamWaitEvent(stream, event);
+}

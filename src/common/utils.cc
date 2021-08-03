@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <string>
 
 namespace qmpi {
 namespace common {
@@ -7,6 +8,12 @@ namespace utils {
 int GetIntEnvOrDefault(const char *env_variable, int default_value) {
   auto env_value = std::getenv(env_variable);
   return env_value != nullptr ? std::strtol(env_value, nullptr, 10)
+                              : default_value;
+}
+
+float GetFloatEnvOrDefault(const char *env_variable, float default_value) {
+  auto env_value = std::getenv(env_variable);
+  return env_value != nullptr ? std::stof(std::string(env_value))
                               : default_value;
 }
 

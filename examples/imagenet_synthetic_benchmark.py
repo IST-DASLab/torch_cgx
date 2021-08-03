@@ -66,8 +66,11 @@ model = getattr(models, args.model)()
 model.cuda()
 
 optimizer = optim.SGD(model.parameters(), lr=0.01)
-
-model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
+if args.world_size > 1:
+    model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
+else:
+    pass
+    # model = torch.nn.DataParallel(model)
 
 # Set up fixed fake data
 data = torch.randn(args.batch_size, 3, 224, 224)
@@ -93,6 +96,13 @@ log('Model: %s' % args.model)
 log('Batch size: %d' % args.batch_size)
 device = 'GPU'
 log('Number of %ss: %d' % (device, args.world_size))
+
+if args.dist_backend == 'qmpi':
+    layers = [(name, p.numel()) for name, p in model.named_parameters()]
+    torch_qmpi.register_model(layers)
+    torch_qmpi.exclude_layer("bn")
+    torch_qmpi.exclude_layer("bias")
+
 
 # Warm-up
 log('Running warmup...')
