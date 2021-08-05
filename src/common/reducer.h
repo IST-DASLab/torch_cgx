@@ -15,7 +15,7 @@ public:
 
   virtual ~Reducer() = default;
   virtual int AllreduceDivision(int num_elements, int global_offset,
-                                std::vector<at::Tensor> &tensors,
+                                std::vector<Layer> &layers,
                                 void *comm, bool do_compression) = 0;
 protected:
   std::shared_ptr<Compressor> compressor_;

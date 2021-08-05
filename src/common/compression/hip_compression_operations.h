@@ -11,7 +11,7 @@ void HIP_quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
                          hipStream_t stream);
 
 template<typename T, bool ADD>
-void HIP_quantize_maxmin(unsigned char *input_data,
+void HIP_dequantize_maxmin(unsigned char *input_data,
                          unsigned char *output_data, int num_elems, int bits,
                          int bucket_size, hipStream_t stream);
 

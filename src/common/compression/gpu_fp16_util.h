@@ -3,7 +3,7 @@
 #if HAVE_CUDA
 #include <cuda_fp16.h>
 #elif HAVE_ROCM
-#include <hip_fp16.h>
+#include <hip/hip_fp16.h>
 #endif
 
 namespace qmpi {

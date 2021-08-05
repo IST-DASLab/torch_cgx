@@ -22,7 +22,7 @@ do {                                                                           \
   if (hip_result != hipSuccess) {                                              \
     printf("%s on line %i in %s returned: %s(code:%i)\n", #condition,          \
            __LINE__, __FILE__, hipGetErrorString(hip_result),                  \
-           result);                                                            \
+           hip_result);                                                            \
     throw std::runtime_error(                                                  \
         std::string(#condition) + " in file " + __FILE__                       \
         + " on line " + std::to_string(__LINE__) +                             \

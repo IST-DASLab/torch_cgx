@@ -3,7 +3,7 @@
 #if HAVE_CUDA
 #include "cuda_compression_operations.h"
 #elif HAVE_ROCM
-#include "hip_compression_functions.h"
+#include "hip_compression_operations.h"
 #endif
 namespace qmpi {
 namespace common {

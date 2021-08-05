@@ -368,6 +368,11 @@ __global__ void UnpackArray(unsigned char *input, unsigned char *meta_info,
         typename TypeToVectorType<T>::vector_union output_union;
 #pragma unroll
         for (int j = 0; j < PACK_SIZE; j += 4) {
+          typename TypeToVectorType<T>::vector_type *output_p =
+              reinterpret_cast<typename TypeToVectorType<T>::vector_type *>(
+                  &output[i * PACK_SIZE + j]);
+          if (ADD)
+            output_union.vec = *output_p;
 #pragma unroll
           for (int k = 0; k < TypeToVectorType<T>::num_values; k++) {
             unsigned char encoded_value =
@@ -381,6 +386,7 @@ __global__ void UnpackArray(unsigned char *input, unsigned char *meta_info,
             } else {
               output_union.a[k] = d;
             }
+            *output_p = output_union.vec;
           }
           typename TypeToVectorType<T>::vector_type *output_p =
               reinterpret_cast<typename TypeToVectorType<T>::vector_type *>(

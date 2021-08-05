@@ -106,12 +106,12 @@ public:
                hipMemcpyAsync(dst, src, count, hipMemcpyDeviceToHost, stream));
   }
 
-  void MemcpyAsyncD2D(void *dst, const void *src, size_t count) {
+  void MemcpyD2D(void *dst, const void *src, size_t count) {
     ErrorCheck("hipMemcpyAsync",
-               hipMemcpy(dst, src, count, hipMemcpyDeviceToHost));
+               hipMemcpy(dst, src, count, hipMemcpyDeviceToDevice));
   }
 
-  void DeviceSynchronize(void *dst, const void *src, size_t count) {
+  void DeviceSynchronize() {
     ErrorCheck("hipDeviceSynchronize", hipDeviceSynchronize());
   }
 

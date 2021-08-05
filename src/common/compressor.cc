@@ -15,6 +15,7 @@ Compressor::Compressor(GPUContext *gpu_context) : gpu_context_(gpu_context) {
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   tensor_fusion_size_ =
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
+//  layers_configs["word_emb.emb_layers.0.weight"] = {3, 256, false};
 }
 
 void Compressor::ResetParamsFromEnv() {
