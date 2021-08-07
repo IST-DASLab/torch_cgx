@@ -21,9 +21,9 @@
 #include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
 
-namespace cgx {
+namespace qmpi {
 
-constexpr const char *CGX_BACKEND_NAME = "cgx";
+constexpr const char *QMPI_BACKEND_NAME = "qmpi";
 
 // WorkEntry is the state associated with a single MPI run instance.
 // It include the source Tensor list and destination Tensor list, as well as
@@ -55,40 +55,65 @@ struct WorkEntry {
   std::function<void(std::unique_ptr<WorkEntry> &)> run;
 };
 
-// ProcessGroupCGX implements MPI bindings with quantization for c10d.
+// ProcessGroupQMPI implements MPI bindings with quantization for c10d.
 //
 // All functions on this class are expected to be called in the same
 // order across processes in the group. This is the only way that we
 // can guarantee to match up the same calls across processes.
 //
 // All MPI functions provided by this class is asynchronously scheduled on a
-// Worker thread. Therefore, ProcessGroupCGX requires the MPI implementation
+// Worker thread. Therefore, ProcessGroupQMPI requires the MPI implementation
 // that is used to have a minimum thread support value of MPI_THREAD_SERIALIZED.
 // That is, The process may be multi-threaded, and multiple threads may make
 // MPI calls, but only one at a time: MPI calls are not made concurrently from
 // two distinct threads (all MPI calls are serialized). However, with
-// MPI_THREAD_SERIALIZED, ProcessGroupCGX will only support a singe process
+// MPI_THREAD_SERIALIZED, ProcessGroupQMPI will only support a singe process
 // group. In other words, no more than 1 process group can be created globally.
 //
-// If you would like to use multiple ProcessGroupCGX, it requres your MPI
+// If you would like to use multiple ProcessGroupQMPI, it requres your MPI
 // implemenation to have a thread support value of MPI_THREAD_MULTIPLE, that is,
 // multiple threads may call MPI, with no restriction.
 //
-// Also note that ProcessGroupCGX only supports a single Tensor operation. In
+// Also note that ProcessGroupQMPI only supports a single Tensor operation. In
 // other words, the size of the input Tensor vector should always be 1.
 //
 // CUDA tensor can be supported if the MPI used is CUDA-aware MPI, and
-// ProcessGroupCGX will automatically detect this support.
-class ProcessGroupCGX : public c10d::ProcessGroup {
- public:
-class WorkMPI : public c10d::ProcessGroup::Work {
-   protected:
-    friend class ProcessGroupCGX;
+// ProcessGroupQMPI will automatically detect this support.
+class ProcessGroupQMPI : public c10d::ProcessGroup {
+public:
+  class WorkMPI : public c10d::ProcessGroup::Work {
+  public:
+    explicit WorkMPI(
+        std::vector<at::Tensor> outputTensors,
+        const char *profilingTitle = nullptr,
+        const c10::optional<std::vector<at::Tensor>> &inputTensors =
+        c10::nullopt)
+        : ProcessGroup::Work(-1, c10d::OpType::UNKNOWN, profilingTitle, inputTensors),
+          outputTensors_(std::move(outputTensors)),
+          future_(c10::make_intrusive<at::ivalue::Future>(
+              c10::ListType::create(c10::TensorType::get()))) {}
+
+    std::vector<at::Tensor> result() override;
+
+    c10::intrusive_ptr<c10::ivalue::Future> getFuture() override;
+
+  protected:
+    friend class ProcessGroupQMPI;
+
+  private:
+    void finishWorkMPI();
+    void finishWorkMPIError(std::exception_ptr eptr);
+
+    std::vector<at::Tensor> outputTensors_;
+    c10::intrusive_ptr<at::ivalue::Future> future_;
   };
 
   class AsyncWork : public c10d::ProcessGroup::Work {
-   public:
-    AsyncWork(at::Tensor tensor, MPI_Request request);
+  public:
+    AsyncWork(MPI_Request request,
+              std::vector<at::Tensor> outputTensors,
+              const char* profilingTitle,
+              const c10::optional<std::vector<at::Tensor>>& inputTensors);
     virtual ~AsyncWork();
 
     bool isCompleted() override;
@@ -100,25 +125,27 @@ class WorkMPI : public c10d::ProcessGroup::Work {
     bool wait(std::chrono::milliseconds timeout = c10d::kUnsetTimeout) override;
 
     void abort() override;
+    std::vector<at::Tensor> result() override;
 
-   protected:
+  protected:
     void populateException();
 
-    at::Tensor tensor_;
+  private:
+    const std::vector<at::Tensor> outputTensors_;
     MPI_Request request_;
     MPI_Status status_;
   };
 
   // Constructor will spawn up the worker thread loop
-  explicit ProcessGroupCGX(int rank, int size, MPI_Comm pgComm);
+  explicit ProcessGroupQMPI(int rank, int size, MPI_Comm pgComm);
 
-  virtual ~ProcessGroupCGX();
+  virtual ~ProcessGroupQMPI();
 
   // Abort the MPI program, needs to be called when exception is detected
   void abort();
 
   const std::string getBackendName() const override {
-    return std::string(CGX_BACKEND_NAME);
+    return std::string(QMPI_BACKEND_NAME);
   }
 
   c10::intrusive_ptr<c10d::ProcessGroup::Work> broadcast(
@@ -143,7 +170,7 @@ class WorkMPI : public c10d::ProcessGroup::Work {
       std::vector<at::Tensor> &inputTensors,
       const c10d::AllgatherOptions &opts = c10d::AllgatherOptions()) override;
 
-  c10::intrusive_ptr<c10d::ProcessGroup::Work> allgather_base(
+  c10::intrusive_ptr<c10d::ProcessGroup::Work> _allgather_base(
       at::Tensor &outputbuffer,
       at::Tensor &inputbuffer,
       const c10d::AllgatherOptions &opts = c10d::AllgatherOptions()) override;
@@ -197,17 +224,19 @@ class WorkMPI : public c10d::ProcessGroup::Work {
   c10::intrusive_ptr<c10d::ProcessGroup::Work> barrier(
       const c10d::BarrierOptions &opts = c10d::BarrierOptions()) override;
 
-  // Creating a new ProcessGroupCGX, will initiialize MPI if not initialized
-  static c10::intrusive_ptr<c10d::ProcessGroup> createProcessGroupCGX(
+  // Creating a new ProcessGroupQMPI, will initiialize MPI if not initialized
+  static c10::intrusive_ptr<c10d::ProcessGroup> createProcessGroupQMPI(
       const c10::intrusive_ptr<c10d::Store> &store,
       int rank,
       int size,
       const std::chrono::duration<float> &timeout);
 
-  static void ProcessGroupCGXConstructor() __attribute__((constructor)) {
+  static void ProcessGroupQMPIConstructor() __attribute__((constructor)) {
     py::object module = py::module::import("torch.distributed");
-    py::object register_backend = module.attr("Backend").attr("register_backend");
-    register_backend(CGX_BACKEND_NAME, py::cpp_function(createProcessGroupCGX));
+    py::object
+        register_backend = module.attr("Backend").attr("register_backend");
+    register_backend(QMPI_BACKEND_NAME,
+                     py::cpp_function(createProcessGroupQMPI));
   }
 
   // Support float16 in MPI
@@ -222,7 +251,10 @@ protected:
   // Helper function that is called by the destructor
   void destroy();
 
-  c10::intrusive_ptr<c10d::ProcessGroup::Work> enqueue(std::unique_ptr<WorkEntry> entry);
+  c10::intrusive_ptr<c10d::ProcessGroup::Work> enqueue(std::unique_ptr<WorkEntry> entry,
+                                                       const char *profilingTitle,
+                                                       const c10::optional<std::vector<
+                                                           at::Tensor>> &inputTensors);
 
   bool stop_;
 
@@ -246,4 +278,4 @@ protected:
 
 };
 
-} // namespace cgx
+} // namespace qmpi
