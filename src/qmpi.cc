@@ -325,7 +325,6 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
         c10::DeviceGuard guard(bucket.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
         auto torch_stream = c10::cuda::getCurrentCUDAStream(bucket.get_device());
-//        cudaStreamSynchronize(torch_stream);
         torch_stream.synchronize();
         if (do_compress) {
 //          if (rank_ == 0) {

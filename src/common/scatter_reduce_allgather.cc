@@ -5,7 +5,6 @@
 #include "shm_communicator.h"
 #endif
 
-#include <c10/cuda/CUDAStream.h>
 
 namespace qmpi {
 namespace common {
@@ -53,14 +52,14 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
   MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
   int status;
   if (do_compression) {
-    status = AllreduceDivisionCompressed(num_elements,
-                                       global_offset,
-                                       layers,
-                                       comm_p);
-//    status = AllReduceAlltoAll(num_elements,
-//                               global_offset,
-//                               layers,
-//                               comm_p);
+//    status = AllreduceDivisionCompressed(num_elements,
+//                                       global_offset,
+//                                       layers,
+//                                       comm_p);
+    status = AllReduceAlltoAll(num_elements,
+                               global_offset,
+                               layers,
+                               comm_p);
   } else {
     status = AllreduceDivisionUncompressed(num_elements,
                                            global_offset,
@@ -108,7 +107,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
     send_compressed_size = utils::aligned_size(
         compressor_->Compress(send_buf, layers, start_offset,
                           send_num_elems, streams_[node_rank]));
-//                              send_num_elems, streams_[0]));
     send_buf += send_compressed_size;
     send_sizes.push(send_compressed_size);
   }
@@ -150,10 +148,8 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
                         start_elem,
                         recv_num_elems,
                         streams_[rank]);
-//                        streams_[0]);
   compressor_->Decompress(gradients_send_, layers, start_elem,
                           recv_num_elems, false, streams_[rank]);
-//                          recv_num_elems, false, streams_[rank]);
   gpu_context_->StreamSynchronize(streams_[rank]);
   recv_buf = gradients_recv_;
   // second round of SRA. receive the sums from other nodes. Perform
@@ -203,7 +199,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
     }
   }
   communicator_->WaitAllSend();
-//  for (int i = 0; i < world_size; i++) {
   for (int i = 0; i < world_size; i++) {
     gpu_context_->StreamSynchronize(streams_[i]);
   }
@@ -226,7 +221,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAll(int num_elements,
                                               global_offset,
                                               num_elements,
                                               gpu_stream);
-
+  gpu_context_->StreamSynchronize(gpu_stream);
   unsigned char *recv_buf = gradients_recv_;
   std::vector<int> nodes;
   for (int node_rank = 0; node_rank < world_size; node_rank++) {

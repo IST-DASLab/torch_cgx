@@ -6,8 +6,13 @@
 namespace qmpi {
 namespace common {
 namespace gpu {
+#if CUDA_VECTORIZED
 const bool VECTORIZE_COMPRESS = true;
-const bool VECTORIZE_DECOMPRESS = true;
+const bool VECTORIZE_DECOMPRESS = false;
+#else
+const bool VECTORIZE_COMPRESS = false;
+const bool VECTORIZE_DECOMPRESS = false;
+#endif
 
 __global__ void _init_rand(unsigned int seed, RandState *states) {
   unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -203,10 +208,11 @@ pack_value<8>(const uint64_t value,
   pack_value<4>(value, output + 4, 4);
 }
 
-template<typename T, bool EF, int BITS>
+template<typename T, bool EF, int BITS, bool VECTORIZE>
 __device__ void CompressBucket(T *input, unsigned char *output,
                                T *feedback_data, unsigned char *meta_info,
                                const int num_elems, RandState *state) {
+  typename TypeToVectorType<T>::vector_union input_vector;
   const unsigned int tid = threadIdx.x;
   const unsigned int num_threads = blockDim.x;
   float rand;
@@ -215,8 +221,7 @@ __device__ void CompressBucket(T *input, unsigned char *output,
   for (unsigned int i = tid; i < (num_elems + PACK_SIZE - 1) / PACK_SIZE;
        i += num_threads) {
     uint64_t value = 0;
-    if (VECTORIZE_COMPRESS) {
-      typename TypeToVectorType<T>::vector_union input_vector;
+    if (VECTORIZE) {
       if (num_elems - i * PACK_SIZE >= PACK_SIZE) {
 #pragma unroll
         for (unsigned int j = 0; j < PACK_SIZE;
@@ -274,7 +279,7 @@ __device__ void CompressBucket(T *input, unsigned char *output,
   }
 }
 
-template<typename T, bool EF, int BITS>
+template<typename T, bool EF, int BITS, bool VECTORIZE>
 __global__ void pack_array(unsigned char *input_data, unsigned char *output_data,
                          unsigned char *feedback_data, const int num_elems,
                          const unsigned int bucket_size, RandState *states) {
@@ -298,7 +303,7 @@ __global__ void pack_array(unsigned char *input_data, unsigned char *output_data
   for (unsigned int i = tid; i < (num_elems + PACK_SIZE - 1) / PACK_SIZE;
        i += stride) {
     uint64_t value = 0;
-    if (VECTORIZE_COMPRESS) {
+    if (VECTORIZE) {
       typename TypeToVectorType<T>::vector_union input_vector;
       if (num_elems - i * PACK_SIZE >= PACK_SIZE) {
 #pragma unroll
@@ -455,7 +460,7 @@ inline __device__ void unpack_value<8>(unsigned char *input, uint64_t &value,
   unpack_value<4>(input + 4, value, 4);
 }
 
-template<typename T, bool ADD, int BITS>
+template<typename T, bool ADD, int BITS, bool VECTORIZE>
 __global__ void UnpackArray(unsigned char *input,
                             unsigned char *meta_info,
                             T *output,
@@ -468,7 +473,7 @@ __global__ void UnpackArray(unsigned char *input,
   for (unsigned int i = tid; i < (num_elems + PACK_SIZE - 1) / PACK_SIZE;
        i += stride) {
     uint64_t value = 0;
-    if (VECTORIZE_DECOMPRESS) {
+    if (VECTORIZE) {
       if ((i + 1) * BITS > num_char) {
         for (unsigned int j = 0; j < num_char - i * BITS; j++)
           value |= ((uint64_t) input[i * BITS + j]) << (j * PACK_SIZE);
@@ -566,7 +571,7 @@ void CUDA_float2half(float *input,
   CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
-template<typename T, bool EF, int BITS>
+template<typename T, bool EF, int BITS, bool VECTORIZE>
 inline void QUANTIZE2(unsigned char *input_data, unsigned char *output_data,
                      unsigned char *feedback_data, int num_elems,
                      int bucket_size, RandState *states, cudaStream_t stream) {
@@ -578,52 +583,52 @@ inline void QUANTIZE2(unsigned char *input_data, unsigned char *output_data,
   find_meta<T, BITS><<<num_blocks, num_threads, shared_memory_block_size, stream>>>((T*)input_data, output_data, num_elems, bucket_size);
   num_threads = THREADS_PER_BLOCK_DECOMPRESS;
   num_blocks = BLOCKS_PER_GRID(num_elems / PACK_SIZE, num_threads);
-  pack_array<T, EF, BITS><<<num_blocks, num_threads, 0, stream>>>(input_data, output_data, feedback_data, num_elems, bucket_size,
+  pack_array<T, EF, BITS, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(input_data, output_data, feedback_data, num_elems, bucket_size,
                                                                   states);
 }
 
-template<typename T, bool EF>
+template<typename T, bool EF, bool VECTORIZE>
 inline void QUANTIZE1(unsigned char *input_data, unsigned char *output_data,
                      unsigned char *feedback_data, int num_elems, int bits,
                      int bucket_size, RandState *states, cudaStream_t stream) {
   switch (bits) {
     case 1:
-      QUANTIZE2<T, EF, 1>(
+      QUANTIZE2<T, EF, 1, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 2:
-      QUANTIZE2<T, EF, 2>(
+      QUANTIZE2<T, EF, 2, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 3:
-      QUANTIZE2<T, EF, 3>(
+      QUANTIZE2<T, EF, 3, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 4:
-      QUANTIZE2<T, EF, 4>(
+      QUANTIZE2<T, EF, 4, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 5:
-      QUANTIZE2<T, EF, 5>(
+      QUANTIZE2<T, EF, 5, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 6:
-      QUANTIZE2<T, EF, 6>(
+      QUANTIZE2<T, EF, 6, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 7:
-      QUANTIZE2<T, EF, 7>(
+      QUANTIZE2<T, EF, 7, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
     case 8:
-      QUANTIZE2<T, EF, 8>(
+      QUANTIZE2<T, EF, 8, VECTORIZE>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states, stream);
       break;
@@ -633,7 +638,7 @@ inline void QUANTIZE1(unsigned char *input_data, unsigned char *output_data,
 }
 
 
-template<typename T, bool EF>
+template<typename T, bool EF, bool VECTORIZE>
 inline void QUANTIZE(unsigned char *input_data, unsigned char *output_data,
                      unsigned char *feedback_data, int num_elems, int bits,
                      int bucket_size, RandState *states, cudaStream_t stream) {
@@ -643,49 +648,49 @@ inline void QUANTIZE(unsigned char *input_data, unsigned char *output_data,
   int shared_memory_block_size = 2 * MAX_THREADS_PER_BLOCK * sizeof(T);
   switch (bits) {
     case 1:
-      quantize<T, EF, 1>
+      quantize<T, EF, 1, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 2:
-      quantize<T, EF, 2>
+      quantize<T, EF, 2, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 3:
-      quantize<T, EF, 3>
+      quantize<T, EF, 3, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 4:
-      quantize<T, EF, 4>
+      quantize<T, EF, 4, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 5:
-      quantize<T, EF, 5>
+      quantize<T, EF, 5, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 6:
-      quantize<T, EF, 6>
+      quantize<T, EF, 6, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 7:
-      quantize<T, EF, 7>
+      quantize<T, EF, 7, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
       break;
     case 8:
-      quantize<T, EF, 8>
+      quantize<T, EF, 8, VECTORIZE>
       <<<num_blocks, num_threads, shared_memory_block_size, stream>>>(
           input_data, output_data, feedback_data, num_elems, bucket_size,
           states);
@@ -700,52 +705,74 @@ void CUDA_quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
                           unsigned char *feedback_data, int num_elems, int bits,
                           int bucket_size, RandState *states,
                           cudaStream_t stream) {
-  QUANTIZE1<T, false>(
-      input_data, output_data, feedback_data, num_elems, bits, bucket_size,
-      states, stream);
+  // if the buffer is not aligned for vectorized, fallback to non-vectorized
+  if (VECTORIZE_COMPRESS and (((unsigned long)input_data & 15) == 0))
+    QUANTIZE1<T, false, true>(
+        input_data, output_data, feedback_data, num_elems, bits, bucket_size,
+        states, stream);
+  else
+    QUANTIZE1<T, false, false>(
+        input_data, output_data, feedback_data, num_elems, bits, bucket_size,
+        states, stream);
+
 }
 
-template<typename T, bool ADD>
+template<typename T, bool ADD, bool VECTORIZE>
 inline void DEQUANTIZE(unsigned char *input, unsigned char *meta_info,
                        T *output, int num_elems, int bucket_size, int bits,
                        cudaStream_t stream, int num_blocks,
                        int num_threads) {
   switch (bits) {
     case 1:
-      UnpackArray<T, ADD, 1><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 1, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 2:
-      UnpackArray<T, ADD, 2><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 2, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 3:
-      UnpackArray<T, ADD, 3><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 3, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 4:
-      UnpackArray<T, ADD, 4><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 4, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 5:
-      UnpackArray<T, ADD, 5><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 5, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 6:
-      UnpackArray<T, ADD, 6><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 6, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 7:
-      UnpackArray<T, ADD, 7><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 7, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     case 8:
-      UnpackArray<T, ADD, 8><<<num_blocks, num_threads, 0, stream>>>(
+      UnpackArray<T, ADD, 8, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(
           input, meta_info, output, num_elems, bucket_size);
       break;
     default:printf("Wrong number of bits %i!!!\n", bits);
   }
   CUDA_CHECK(cudaGetLastError());
+}
+
+template<typename T, bool ADD>
+void DEQUANTIZE1(unsigned char *input, unsigned char *meta_info,
+                 T *output, int num_elems, int bucket_size, int bits,
+                 cudaStream_t stream, int num_blocks,
+                 int num_threads) {
+  // if the buffer is not aligned for vectorized, fallback to non-vectorized
+  if (VECTORIZE_DECOMPRESS and (((unsigned long)output & 15) == 0))
+    DEQUANTIZE<T, ADD, true>(input, meta_info, output, num_elems, bucket_size, bits,
+                             stream, num_blocks, num_threads);
+  else
+    DEQUANTIZE<T, ADD, false>(input, meta_info, output, num_elems, bucket_size, bits,
+                             stream, num_blocks, num_threads);
+
 }
 
 template<typename T, bool ADD>

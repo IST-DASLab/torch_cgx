@@ -8,7 +8,7 @@ QMPI is based on MPI torch.distributed backend. The extension essentially only r
 ## Quick Start
 
 ### Prerequisites
-QMPI, as a pytorch extension, requires `pytorch>=1.6.0`.
+QMPI, as a pytorch extension, requires `pytorch==1.8.0`.
 
 The compression is only supported for GPU-based buffers so either CUDA or ROCm is required.
 If CUDA or ROCm are installed not in the standard paths, set `[CUDA|ROCM]_HOME` or `[CUDA|ROCM]_PATH` accordingly. 
@@ -17,6 +17,7 @@ As long as it is based on MPI, it requires OpenMPI with GPU support installed (o
 
 ### Install
 Set `MPI_HOME` environment variable to mpi home. In case of AMD GPU, set `QMPI_CUDA` to 0.
+Set `CUDA_VECTORIZED` if you want to have compression kernels vectorized (adds ~3% speedup).
 ```bash
 git clone https://github.com/IST-DASLab/pytorch_qmpi
 export MPI_HOME=/path/to/mpi
@@ -36,6 +37,18 @@ import torch_qmpi
 dist.init_process_group('qmpi', init_method='env://', rank=args.local_rank)
 ```
 
+As long as the extension is based on MPI backend, it requires MPI-compliant launcher (`torch.distributed.launch` won't work):
+`$ mpirun -np 2 python train.py`
+
+Also, if your training script was run previously with `torch.distributed.launch` utility, due to MPI launcher you need to set an environment variables (see cifar_train.py in examples)
+```
+if "OMPI_COMM_WORLD_SIZE" in os.environ:
+    os.environ['MASTER_ADDR'] = '127.0.0.1'
+    os.environ['MASTER_PORT'] = '4040'
+    os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
+    os.environ["RANK"] = os.environ["OMPI_COMM_WORLD_RANK"]
+```
+
 ## Tuning
 Qmpi can be tuned with the following environment variables:
 
@@ -45,6 +58,21 @@ Qmpi can be tuned with the following environment variables:
 - `COMPRESSION_MINIMAL_SIZE` - minimal size of buffer (number of elements) to compress. Default is 0 but in fact minimal size is forced to be not less than 16.
 - `FUSION_BUFFER_SIZE_MB`. QMPI is leveraging [Tensor Fusion](https://github.com/horovod/horovod#tensor-fusion), a performance feature introduced in Horovod. This feature batches small allreduce operations. This decreases a latency in Data Parallel training. The environment variable controls the size of maximal buffer (in MB) that is communicated within one iteration of allreduce algorithm. Default is 64. The variable must be set **before** loading the module.
 
+## Layer filtering
+The extension allows users to separate layers which should be communicated in full-precision.
+First, a user needs to register the model layers in the order they would be activated in forward pass:
+```
+layers = [(name, p.numel()) for name, p in model.named_parameters()]
+torch_qmpi.register_model(layers)
+```
+Then, the user needs to exclude the layers or group of layers by their names or part of the names:
+```
+torch_qmpi.exclude_layer("bn") # all batch norm layers
+torch_qmpi.exclude_layer("bias") # all bias modules
+```
+
+IMPORTANT: In the registered model mode `torch_qmpi` assumes that all allreduce of buffers with sizes > 16 elements is gradients synchronization.
+If during the training user applies torch.distributed.allreduce with such buffers after registering model, it will crash the training.  
 ## Examples
 
 Basic examples are provided under the [example](example) folder.
@@ -52,4 +80,4 @@ Basic examples are provided under the [example](example) folder.
 ## Notes
  - As Compression method, basic stochastic max-min uniform quantization function is used.
  - Reduction algorithm: Scatter-Reduce-AllGather.
- - Part of the source code is based on [Horovod](https://github.com/horovod/horovod) sources.
+ - Part of the source code is based on [Horovod](https://github.com/horovod/horovod) and [NCCL](https://github.com/NVIDIA/nccl) sources.
