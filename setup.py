@@ -17,16 +17,16 @@ src = ['src/mpi_allreduce_operations.cc', 'src/qmpi.cc',
        'src/common/compressor.cc', 'src/common/layer.cc', 'src/common/shm_utils.cc',
        'src/common/compression/gpu_compression_operations.cc']
 
-
-if IS_CUDA:
-    src.extend(['src/common/compression/cuda_compression_operations.cu', 'src/common/cuda_operations.cc'])
-else:
-    src.extend(['src/common/compression/hip_compression_operations.cc', 'src/common/hip_operations.cc'])
 # for path, dirs, files in os.walk(root):
 #     for file in files:
 #         if (".cc" in file or '.cu' in file):
 #             if exclude_prefix not in file and "impl" not in file:
 #                 src.append(os.path.join(path, file))
+
+if IS_CUDA:
+    src.extend(['src/common/compression/cuda_compression_operations.cu', 'src/common/cuda_operations.cc'])
+else:
+    src.extend(['src/common/compression/hip_compression_operations.cc', 'src/common/hip_operations.cc'])
 
 compile_args = ["-D_GLIBCXX_USE_CXX11_ABI=0"]
 if IS_CUDA:
@@ -38,6 +38,7 @@ if CUDA_VECTORIZED:
     compile_args.append("-DCUDA_VECTORIZED=1")
 
 setup(name='torch_qmpi',
+      version='0.0.1',
       ext_modules=[cpp_extension.CUDAExtension('torch_qmpi', sources=src,
                                               include_dirs=[os.path.join(MPI_HOME, "include")],
                                               extra_compile_args=compile_args,

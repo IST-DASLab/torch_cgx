@@ -5,6 +5,12 @@
 namespace qmpi {
 namespace common {
 namespace utils {
+
+enum CommunicatorType {
+  MPI,
+  SHM
+};
+
 const size_t ALIGNMENT_UNIT = 2 * sizeof(float);
 
 int GetIntEnvOrDefault(const char *env_variable, int default_value);
@@ -18,6 +24,7 @@ size_t round_to(size_t x, size_t m);
 
 size_t aligned_size(size_t size);
 
+CommunicatorType GetCommTypeFromEnv(const char* env, CommunicatorType default_value);
 
 } // namespace utils
 } // namespace common

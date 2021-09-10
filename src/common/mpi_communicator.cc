@@ -41,6 +41,7 @@ void MPICommunicator::WaitAllSend() {
 int MPICommunicator::TestRecv(int peer_rank) {
   int flag = 0;
   MPI_CHECK(MPI_Test(&recv_requests.at(peer_rank), &flag, MPI_STATUSES_IGNORE));
+  gpu_context_->StreamSynchronize(0);
   return flag;
 }
 

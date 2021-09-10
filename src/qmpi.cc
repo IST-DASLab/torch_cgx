@@ -299,7 +299,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::broadcast(
         MPI_CHECK(MPI_Bcast(
             data.data_ptr(),
             data.numel(),
-            mpiDatatype.at(data.scalar_type()),
+            dtype,
             opts.rootRank,
             pgComm_));
       };
@@ -407,13 +407,22 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allgather(
 
         c10::DeviceGuard guard(data.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_Datatype dtype;
+        if (mpiDatatype.find(data.scalar_type()) != mpiDatatype.end())
+          dtype = mpiDatatype.at(data.scalar_type());
+        else {
+          assert(data.scalar_type() == at::kHalf);
+          MPI_CHECK(MPI_Type_contiguous(2, MPI_BYTE, &dtype));
+          MPI_CHECK(MPI_Type_commit(&dtype));
+          mpiDatatype[data.scalar_type()] = dtype;
+        }
         MPI_CHECK(MPI_Allgather(
             data.data_ptr(),
             data.numel(),
             mpiDatatype.at(data.scalar_type()),
             flatOutputTensor.data_ptr(),
             data.numel(),
-            mpiDatatype.at(data.scalar_type()),
+            dtype,
             pgComm_));
 
         for (size_t i = 0; i < outputDataVec.size(); ++i) {

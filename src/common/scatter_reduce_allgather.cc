@@ -40,8 +40,13 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
   for (int i = 0; i < world_size; i++) {
     gpu_context->StreamCreate(&streams_[i]);
   }
-//  communicator_ = new MPICommunicator(gpu_context);
-  communicator_ = new SHMCommunicator(gpu_context);
+  auto comm_type = utils::GetCommTypeFromEnv(COMMUNICATOR_TYPE, utils::CommunicatorType::SHM);
+#if HAVE_CUDA
+  if (comm_type == utils::CommunicatorType::SHM)
+    communicator_ = new SHMCommunicator(gpu_context);
+  else
+#endif
+    communicator_ = new MPICommunicator(gpu_context);
 }
 
 int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
@@ -52,14 +57,14 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
   MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
   int status;
   if (do_compression) {
-//    status = AllreduceDivisionCompressed(num_elements,
-//                                       global_offset,
-//                                       layers,
-//                                       comm_p);
-    status = AllReduceAlltoAll(num_elements,
-                               global_offset,
-                               layers,
-                               comm_p);
+    status = AllreduceDivisionCompressed(num_elements,
+                                       global_offset,
+                                       layers,
+                                       comm_p);
+//    status = AllReduceAlltoAll(num_elements,
+//                               global_offset,
+//                               layers,
+//                               comm_p);
   } else {
     status = AllreduceDivisionUncompressed(num_elements,
                                            global_offset,
@@ -221,7 +226,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAll(int num_elements,
                                               global_offset,
                                               num_elements,
                                               gpu_stream);
-  gpu_context_->StreamSynchronize(gpu_stream);
   unsigned char *recv_buf = gradients_recv_;
   std::vector<int> nodes;
   for (int node_rank = 0; node_rank < world_size; node_rank++) {
@@ -274,7 +278,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
   gpuStream_t gpu_stream = streams_[rank];
 
   communicator_->Init(world_size, comm_p);
-//  std::vector<MPI_Request> requests;
   if (layers.size() > 1) {
     for (auto &layer: layers) {
       gpu_context_->MemcpyAsyncD2D(send_buf,
@@ -283,7 +286,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
                                    gpu_stream);
       send_buf += layer.numel() * element_size;
     }
-    gpu_context_->StreamSynchronize(gpu_stream);
     send_buf = send_buf_base;
   } else {
     send_buf = static_cast<unsigned char *>(layers[0].data_ptr())
@@ -301,7 +303,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
       }
       send_size = chunk_sizes[node_rank] * element_size;
       communicator_->IRecv(recv_buf, recv_size, node_rank, gpu_stream);
-//      communicator_->ISend(send_buf, send_size, node_rank, gpu_stream);
       communicator_->ISend(send_buf, send_size, node_rank, streams_[node_rank]);
       recv_buf += recv_size;
       send_buf += send_size;
@@ -333,13 +334,11 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
       }
       recv_size = chunk_sizes[node_rank] * element_size;
       communicator_->IRecv(recv_buf, recv_size, node_rank, gpu_stream);
-//      communicator_->ISend(send_buf, send_size, node_rank, gpu_stream);
       communicator_->ISend(send_buf, send_size, node_rank, streams_[node_rank]);
       recv_buf += recv_size;
     }
     communicator_->WaitAllRecv();
     communicator_->WaitAllSend();
-    gpu_context_->StreamSynchronize(gpu_stream);
     send_buf = send_buf_base;
   } else {
     send_size = num_elements * element_size;
@@ -374,10 +373,11 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
       send_buf += layer.numel() * element_size;
     }
   }
-  gpu_context_->StreamSynchronize(gpu_stream);
+  for (int i = 0; i < world_size; i++) {
+    gpu_context_->StreamSynchronize(streams_[i]);
+  }
   return 0;
 }
 
 } // namespace common
 } // namespace qmpi
-

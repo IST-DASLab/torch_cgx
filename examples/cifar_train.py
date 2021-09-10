@@ -148,9 +148,9 @@ model = models.resnet18(num_classes=num_classes)
 
 if args.dist_backend == 'qmpi':
     layers = [(name, p.numel()) for name, p in model.named_parameters()]
-    torch_qmpi.register_model(layers)
-    torch_qmpi.exclude_layer("bn")
-    torch_qmpi.exclude_layer("bias")
+    # torch_qmpi.register_model(layers)
+    # torch_qmpi.exclude_layer("bn")
+    # torch_qmpi.exclude_layer("bias")
 
 if args.cuda:
     # Move model to GPU.

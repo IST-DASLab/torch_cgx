@@ -785,7 +785,7 @@ void CUDA_dequantize_maxmin(unsigned char *input_data,
   unsigned char *input = input_data + 2 * sizeof(T) * num_buckets;
   int num_threads = THREADS_PER_BLOCK_DECOMPRESS;
   int num_blocks = BLOCKS_PER_GRID(num_elems / PACK_SIZE, num_threads);
-  DEQUANTIZE<T, ADD>(input, meta_info, output, num_elems, bucket_size, bits,
+  DEQUANTIZE1<T, ADD>(input, meta_info, output, num_elems, bucket_size, bits,
                      stream, num_blocks, num_threads);
 }
 

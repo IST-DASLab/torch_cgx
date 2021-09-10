@@ -57,6 +57,7 @@ Qmpi can be tuned with the following environment variables:
 - `COMPRESSION_SKIP_INCOMPLETE_BUCKETS` - boolean variable (0 or 1). After the splitting buffer into buckets, some values of buffer may remain. The variable tells quantization algorithm to compress or not to compress the remaining values. Default 0.
 - `COMPRESSION_MINIMAL_SIZE` - minimal size of buffer (number of elements) to compress. Default is 0 but in fact minimal size is forced to be not less than 16.
 - `FUSION_BUFFER_SIZE_MB`. QMPI is leveraging [Tensor Fusion](https://github.com/horovod/horovod#tensor-fusion), a performance feature introduced in Horovod. This feature batches small allreduce operations. This decreases a latency in Data Parallel training. The environment variable controls the size of maximal buffer (in MB) that is communicated within one iteration of allreduce algorithm. Default is 64. The variable must be set **before** loading the module.
+- `COMMUNICATOR_TYPE`. Specifies what library to use as communication backend (MPI or SHM). SHM shows better performance but is limited to a single node.
 
 ## Layer filtering
 The extension allows users to separate layers which should be communicated in full-precision.

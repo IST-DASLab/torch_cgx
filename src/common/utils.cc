@@ -24,6 +24,19 @@ void SetBoolFromEnv(const char *env, bool &val, bool value_if_set) {
   }
 }
 
+CommunicatorType GetCommTypeFromEnv(const char* env, CommunicatorType default_value) {
+  auto env_value = std::getenv(env);
+  if (env_value == nullptr)
+    return default_value;
+  auto env_value_str = std::string(env_value);
+  if (env_value_str == "MPI")
+    return CommunicatorType::MPI;
+  else if (env_value_str == "SHM")
+    return CommunicatorType::SHM;
+  else
+    throw std::runtime_error("Unknown type of communicator");
+}
+
 size_t get_sizeof(at::ScalarType dtype) {
   if (dtype == at::kHalf) {
     return sizeof(float) / 2;
