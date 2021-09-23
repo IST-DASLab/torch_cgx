@@ -89,7 +89,7 @@ class QmpiTests(unittest.TestCase):
                     t = input.clone()
                     dist.all_reduce(t, op=dist.ReduceOp.SUM)
                     size = t.numel()
-                    coef = (self.world_size * (self.world_size + 1) / 2)
+                    coef = self.world_size * (self.world_size + 1)
                     self.assertLess(torch.norm(t - expected, p=float("inf")).item(), 2 * min(bucket_size, size) / ((1 << q) - 1) * coef,
                                     "Parameters. bits {}, bucket_size: {}, buffer size: {}".format(q, bucket_size, size))
 
