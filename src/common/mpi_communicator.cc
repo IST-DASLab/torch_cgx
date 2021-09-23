@@ -11,6 +11,7 @@ void MPICommunicator::Init(int world_size, void* ctx) {
   comm_ = *(static_cast<MPI_Comm *>(ctx));
   MPI_CHECK(MPI_Comm_rank(comm_, &rank_));
   world_size_ = world_size;
+  MPI_Barrier(comm_);
 }
 
 void MPICommunicator::IRecv(void *buf,
@@ -26,8 +27,8 @@ void MPICommunicator::ISend(void *buf,
                             size_t buf_size,
                             int peer_rank,
                             gpuStream_t stream) {
-  gpu_context_->StreamSynchronize(stream);
   send_requests.push_back(MPI_Request());
+  gpu_context_->StreamSynchronize(stream);
   MPI_CHECK(MPI_Isend(buf, buf_size, MPI_UNSIGNED_CHAR,
                       peer_rank, 0, comm_, &send_requests.back()));
 }
@@ -41,7 +42,10 @@ void MPICommunicator::WaitAllSend() {
 int MPICommunicator::TestRecv(int peer_rank) {
   int flag = 0;
   MPI_CHECK(MPI_Test(&recv_requests.at(peer_rank), &flag, MPI_STATUSES_IGNORE));
-  gpu_context_->StreamSynchronize(0);
+//  if (flag) {
+//    gpu_context_->MemcpyAsyncH2D(recv_bufs[peer_rank], recv_host_bufs[peer_rank], recv_size[peer_rank], recv_streams[peer_rank]);
+//    gpu_context_->StreamSynchronize(recv_streams[peer_rank]);
+//  }
   return flag;
 }
 

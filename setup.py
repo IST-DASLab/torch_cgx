@@ -2,9 +2,6 @@ from setuptools import setup, Extension
 from torch.utils import cpp_extension
 import os
 
-MPI_HOME=os.environ.get("MPI_HOME", "/usr/local/mpi")
-IS_CUDA=int(os.environ.get("QMPI_CUDA", "1")) != 0
-CUDA_VECTORIZED=int(os.environ.get("CUDA_VECTORIZED", "1")) != 0
 # src = []
 # root="src"
 # exclude_prefix = "hip_"
@@ -22,6 +19,9 @@ src = ['src/mpi_allreduce_operations.cc', 'src/qmpi.cc',
 #         if (".cc" in file or '.cu' in file):
 #             if exclude_prefix not in file and "impl" not in file:
 #                 src.append(os.path.join(path, file))
+MPI_HOME=os.environ.get("MPI_HOME", "/usr/local/mpi")
+IS_CUDA=int(os.environ.get("QMPI_CUDA", "1")) != 0
+CUDA_VECTORIZED=int(os.environ.get("CUDA_VECTORIZED", "1")) != 0
 
 if IS_CUDA:
     src.extend(['src/common/compression/cuda_compression_operations.cu', 'src/common/cuda_operations.cc'])
@@ -46,5 +46,3 @@ setup(name='torch_qmpi',
                                                                '-lmpi_cxx', '-lmpi'])],
       cmdclass={'build_ext': cpp_extension.BuildExtension},
       )
-
-

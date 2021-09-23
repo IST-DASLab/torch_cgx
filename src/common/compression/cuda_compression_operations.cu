@@ -8,7 +8,7 @@ namespace common {
 namespace gpu {
 #if CUDA_VECTORIZED
 const bool VECTORIZE_COMPRESS = true;
-const bool VECTORIZE_DECOMPRESS = false;
+const bool VECTORIZE_DECOMPRESS = true;
 #else
 const bool VECTORIZE_COMPRESS = false;
 const bool VECTORIZE_DECOMPRESS = false;
@@ -124,7 +124,6 @@ template<typename T, int BITS>
 __global__ void find_meta(T *input, unsigned char *meta,
                           const int num_elems, const int bucket_size) {
   unsigned num_blocks = gridDim.x;
-  unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
   unsigned int bid = blockIdx.x;
   unsigned int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
   unsigned int cur_bucket_size;
@@ -283,11 +282,8 @@ template<typename T, bool EF, int BITS, bool VECTORIZE>
 __global__ void pack_array(unsigned char *input_data, unsigned char *output_data,
                          unsigned char *feedback_data, const int num_elems,
                          const unsigned int bucket_size, RandState *states) {
-  unsigned num_blocks = gridDim.x;
   unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-  unsigned int bid = blockIdx.x;
   unsigned int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
-  unsigned int cur_bucket_size;
   unsigned char* meta_info = output_data;
   T *input = (T *) input_data;
   unsigned char *output;

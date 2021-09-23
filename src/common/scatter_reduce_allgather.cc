@@ -237,8 +237,10 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAll(int num_elements,
     nodes.push_back(node_rank);
     recv_buf += compressed_size;
   }
+  communicator_->WaitAllSend();
   compressor_->Decompress(gradients_send_, layers, global_offset, num_elements,
                           false, gpu_stream);
+
   while (nodes.size() > 0) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
@@ -251,7 +253,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAll(int num_elements,
       }
     }
   }
-  communicator_->WaitAllSend();
   gpu_context_->StreamSynchronize(gpu_stream);
   return 0;
 }

@@ -10,6 +10,8 @@ QMPI is based on MPI torch.distributed backend. The extension essentially only r
 ### Prerequisites
 QMPI, as a pytorch extension, requires `pytorch==1.8.0`.
 
+For faster build we recommend to have `ninja` installed (`pip install ninja`).
+
 The compression is only supported for GPU-based buffers so either CUDA or ROCm is required.
 If CUDA or ROCm are installed not in the standard paths, set `[CUDA|ROCM]_HOME` or `[CUDA|ROCM]_PATH` accordingly. 
 

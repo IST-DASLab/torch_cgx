@@ -317,8 +317,6 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
       or tensor.scalar_type() == at::kHalf) and
       opts.reduceOp == c10d::ReduceOp::SUM and
       tensor.device().type() == at::kCUDA;
-//      tensor.device().type() == at::kCUDA;
-//  bool do_compress = false;
   std::function<void(std::unique_ptr < WorkEntry > &)> runFunc =
       [opts, do_compress, this](std::unique_ptr<WorkEntry> &entry) {
         auto& bucket = entry->src[0];
@@ -327,9 +325,6 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
         auto torch_stream = c10::cuda::getCurrentCUDAStream(bucket.get_device());
         torch_stream.synchronize();
         if (do_compress) {
-//          if (rank_ == 0) {
-//            std::cout << "Bucket size: " << bucket.numel() << std::endl;
-//          }
           allreduce_operator->PerformOperation(bucket);
         } else {
           MPI_CHECK(MPI_Allreduce(
@@ -579,7 +574,13 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::reduce_scatter(
     std::vector<at::Tensor> &outputTensors,
     std::vector<std::vector<at::Tensor>> &inputTensors,
     const c10d::ReduceScatterOptions &opts) {
-  throw std::runtime_error("ProcessGroupQMPI does not support reduce_scatter");
+  std::function<void(std::unique_ptr < WorkEntry > &)> runFunc =
+      [opts, this](std::unique_ptr<WorkEntry> &entry) {
+      };
+  auto entry = std::unique_ptr<WorkEntry>(
+      new WorkEntry(&inputTensors[0], &outputTensors, std::move(runFunc)));
+  return enqueue(std::move(entry));
+//  throw std::runtime_error("ProcessGroupQMPI does not support reduce_scatter");
 }
 
 c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::alltoall_base(

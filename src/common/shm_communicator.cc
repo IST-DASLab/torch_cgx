@@ -31,13 +31,7 @@ SHMCommunicator::~SHMCommunicator() {
 
 void SHMCommunicator::Init(int world_size, void *ctx) {
   if (initialized_) {
-//    unsigned int fusion_size_mb =
-//        utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
-//    unsigned int buf_size =
-//        std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
     for (auto &resource: send_resources) {
-//      void* buf = resource.second.first.devHostMem;
-//      cudaMemset(static_cast<char *>(buf), 0, buf_size);
       resource.second.first.shmOffset = 0;
     }
     for (auto &resource: recv_resources) {

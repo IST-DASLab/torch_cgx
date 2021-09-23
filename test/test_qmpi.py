@@ -12,8 +12,8 @@ def reduce_equal_tests(rank, world_size, device="cuda"):
     for dtype in [torch.float16, torch.float32, torch.int32]:
         for size in sizes:
             tests.append((
-                torch.tensor([rank + 1.0] * size, dtype=dtype, device=device),
-                torch.tensor([float(world_size * (world_size + 1) / 2)] * size, dtype=dtype, device=device)
+                torch.tensor([rank + 1] * size, dtype=dtype, device=device),
+                torch.tensor([(world_size * (world_size + 1)) // 2] * size, dtype=dtype, device=device)
                 )
             )
     return tests
@@ -31,7 +31,7 @@ def reduce_nonequal_tests(rank, world_size, device="cuda"):
                     arange *= 1e-3
                 tests.append((
                     torch.tensor((rank + 1) * arange, dtype=dtype, device=device),
-                    torch.tensor((world_size * (world_size + 1) / 2) * arange, dtype=dtype, device=device),
+                    torch.tensor(((world_size * (world_size + 1)) / 2) * arange, dtype=dtype, device=device),
                     bit
                     )
                 )

@@ -42,6 +42,7 @@ MPIAllReduce_Operation::MPIAllReduce_Operation() {
       common::utils::GetFloatEnvOrDefault(COMPRESSION_FAKE_RATIO, 1.0);
   tensor_fusion_threshold_ =
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
+  counter_ = 0;
 }
 
 int MPIAllReduce_Operation::allReduce(int num_elements,
@@ -78,9 +79,6 @@ int MPIAllReduce_Operation::performOperation(std::vector<common::Layer> &layers,
 //    std::cout << "buffer size "  << num_elements << std::endl;
 
   if (num_elements < max_buffer_size) {
-//    for (auto& layer: layers)
-//      performOperationSingle(layer, do_compression);
-//    return status;
     return allReduce(num_elements, 0, layers, do_compression);
   }
   std::vector<common::Layer> tmp_layers;
@@ -138,17 +136,19 @@ void MPIAllReduce_Operation::extractLayers(const at::Tensor &bucket,
   int cur_numel = 0;
   char *ptr = static_cast<char *>(bucket.data_ptr());
   while (cur_numel < bucket_numel) {
-    auto &param = model_parameters_.at(counter);
+    auto &param = model_parameters_.at(counter_);
     layers.emplace_back(bucket, param.first, ptr, param.second);
     cur_numel += param.second;
     ptr += param.second * bucket.element_size();
-    counter++;
+    counter_++;
   }
   if (cur_numel != bucket_numel) {
-    throw std::runtime_error("Cur numel less than bucket_numel");
+    throw std::runtime_error("Error at extracting the layers from bucket. "
+                             "Number of elements in bucket is not equal to "
+                             "number in the layers expected to be in "
+                             "the bucket.");
   }
-  assert(cur_numel == bucket_numel);
-  counter %= model_parameters_.size();
+  counter_ %= model_parameters_.size();
 }
 
 void MPIAllReduce_Operation::ExcludeLayer(const std::string &layer) {

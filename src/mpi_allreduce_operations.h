@@ -37,6 +37,6 @@ private:
   int performOperation(std::vector<common::Layer> &tensors,
                        bool do_compression);
   static std::vector<std::pair<std::string, int>> model_parameters_;
-  int counter;
+  int counter_;
 };
 } // namespace qmpi
