@@ -29,20 +29,23 @@ else:
     src.extend(['src/common/compression/hip_compression_operations.cc', 'src/common/hip_operations.cc'])
 
 cxx_compile_args = ["-D_GLIBCXX_USE_CXX11_ABI=0"]
+nvcc_compile_args = []
 if IS_CUDA:
     cxx_compile_args.append("-DHAVE_CUDA=1")
+    nvcc_compile_args.append("-DHAVE_CUDA=1")
     os.environ['TORCH_CUDA_ARCH_LIST'] = '7.0;7.5;8.6'
 else:
     cxx_compile_args.append("-DHAVE_ROCM=1")
+    nvcc_compile_args.append("-DHAVE_ROCM=1")
 
 if CUDA_VECTORIZED:
-    cxx_compile_args.append("-DCUDA_VECTORIZED=1")
+    nvcc_compile_args.append("-DCUDA_VECTORIZED=1")
 
 setup(name='torch_qmpi',
       version='0.0.1',
       ext_modules=[cpp_extension.CUDAExtension('torch_qmpi', sources=src,
                                               include_dirs=[os.path.join(MPI_HOME, "include")],
-                                              extra_compile_args={'cxx': cxx_compile_args},
+                                              extra_compile_args={'cxx': cxx_compile_args, 'nvcc': nvcc_compile_args},
                                               extra_link_args=['-L'+ os.path.join(MPI_HOME, 'lib'),
                                                                '-lmpi_cxx', '-lmpi'])],
       cmdclass={'build_ext': cpp_extension.BuildExtension},
