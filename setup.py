@@ -47,6 +47,6 @@ setup(name='torch_qmpi',
                                               include_dirs=[os.path.join(MPI_HOME, "include")],
                                               extra_compile_args={'cxx': cxx_compile_args, 'nvcc': nvcc_compile_args},
                                               extra_link_args=['-L'+ os.path.join(MPI_HOME, 'lib'),
-                                                               '-lmpi_cxx', '-lmpi'])],
+                                                               '-lmpi'])],
       cmdclass={'build_ext': cpp_extension.BuildExtension},
       )
