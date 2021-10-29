@@ -49,6 +49,14 @@ int MPICommunicator::TestRecv(int peer_rank) {
   return flag;
 }
 
+void MPICommunicator::WaitRecv(int rank) {
+  MPI_CHECK(MPI_Wait(&recv_requests.at(rank), MPI_STATUSES_IGNORE));
+}
+
+void MPICommunicator::WaitSend(int rank) {
+  MPI_CHECK(MPI_Wait(&send_requests.at(rank), MPI_STATUSES_IGNORE));
+}
+
 void MPICommunicator::WaitAllRecv() {
   for (int peer_rank = 0; peer_rank < world_size_; peer_rank++){
     if (peer_rank == rank_)

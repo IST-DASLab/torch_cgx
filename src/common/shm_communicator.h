@@ -18,6 +18,8 @@ struct SHMCommunicator : public Communicator {
                      gpuStream_t stream) override;
   virtual void IRecv(void *buf, size_t buf_size, int peer_rank,
                      gpuStream_t stream) override;
+  virtual void WaitSend(int rank) override;
+  virtual void WaitRecv(int rank) override;
   virtual void WaitAllSend() override;
   virtual void WaitAllRecv() override;
   virtual int TestRecv(int rank) override;

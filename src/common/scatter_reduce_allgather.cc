@@ -1,15 +1,11 @@
 #include "scatter_reduce_allgather.h"
-#include "mpi_communicator.h"
 
-#if HAVE_CUDA
-#include "shm_communicator.h"
-#endif
+#include "compression/gpu_common.h"
 
 
 namespace qmpi {
 namespace common {
 
-#include "compression/gpu_common.h"
 
 void printDebug(unsigned char *buf, int numel) {
   float *host_buf = new float[numel];
@@ -23,9 +19,9 @@ void printDebug(unsigned char *buf, int numel) {
 
 MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
     GPUContext *gpu_context,
-    std::shared_ptr<Compressor> compressor,
+    std::shared_ptr<Compressor> compressor, std::shared_ptr<Communicator> communicator,
     int world_size)
-    : MPIReducer(gpu_context, compressor) {
+    : MPIReducer(gpu_context, compressor, communicator) {
   int64_t chunk_size = tensor_fusion_size_;
   chunk_size = utils::aligned_size((chunk_size + world_size - 1) / world_size);
   int64_t buffer_size = chunk_size * world_size +
@@ -40,13 +36,6 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
   for (int i = 0; i < world_size; i++) {
     gpu_context->StreamCreate(&streams_[i]);
   }
-  auto comm_type = utils::GetCommTypeFromEnv(COMMUNICATOR_TYPE, utils::CommunicatorType::SHM);
-#if HAVE_CUDA
-  if (comm_type == utils::CommunicatorType::SHM)
-    communicator_ = new SHMCommunicator(gpu_context);
-  else
-#endif
-    communicator_ = new MPICommunicator(gpu_context);
 }
 
 int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
@@ -318,7 +307,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
           auto idx = node_rank - ((node_rank > rank) ? 1 : 0);
           recv_buf = gradients_recv_ + recv_size * idx;
 
-          compressor_->Add(recv_num_elems, send_buf, recv_buf, send_buf,
+          Compressor::Add(recv_num_elems, send_buf, recv_buf, send_buf,
                            layers[0].scalar_type(), gpu_stream);
           nodes.erase(nodes.begin() + i);
         }

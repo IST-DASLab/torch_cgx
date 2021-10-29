@@ -175,6 +175,15 @@ void SHMCommunicator::WaitAllRecv() {
   }
 }
 
+void SHMCommunicator::WaitRecv(int rank) {
+  while (!TestRecv(rank)){}
+}
+
+void SHMCommunicator::WaitSend(int rank) {
+  auto eventSync = send_resources.at(rank).second;
+  MPI_Wait(&eventSync.request, MPI_STATUSES_IGNORE);
+}
+
 void SHMCommunicator::sendInit(shmBuffer *buffer,
                                int peer_rank,
                                size_t shm_size) {

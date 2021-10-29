@@ -10,7 +10,7 @@ import os
 
 src = ['src/mpi_allreduce_operations.cc', 'src/qmpi.cc',
        'src/common/reducer.cc', 'src/common/buffer.cc', 'src/common/mpi_communicator.cc', 'src/common/mpi_context.cc',
-       'src/common/shm_communicator.cc', 'src/common/scatter_reduce_allgather.cc', 'src/common/utils.cc',
+       'src/common/shm_communicator.cc', 'src/common/scatter_reduce_allgather.cc', 'src/common/ring.cc', 'src/common/utils.cc',
        'src/common/compressor.cc', 'src/common/layer.cc', 'src/common/shm_utils.cc',
        'src/common/compression/gpu_compression_operations.cc']
 

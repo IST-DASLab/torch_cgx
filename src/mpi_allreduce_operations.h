@@ -23,7 +23,8 @@ struct MPIAllReduce_Operation {
 protected:
   common::GPUContext gpu_context_;
   common::MPIContext mpi_context_;
-  std::shared_ptr<common::Reducer> reducer_;
+  std::shared_ptr<common::Reducer> intra_reducer_;
+  std::shared_ptr<common::Reducer> cross_reducer_;
   std::shared_ptr<common::Compressor> compressor_;
   int64_t tensor_fusion_threshold_;
   float fake_compression_ratio_;

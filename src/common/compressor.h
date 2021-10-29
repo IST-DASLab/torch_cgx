@@ -70,7 +70,7 @@ public:
                                  const std::vector<Layer> &entries,
                                  std::vector<int> &offsets,
                                  std::vector<int> &sizes);
-  void Add(int num_elements,
+  static void Add(int num_elements,
            unsigned char *x,
            unsigned char *y,
            unsigned char *sum,
