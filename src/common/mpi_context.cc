@@ -17,13 +17,13 @@ MPIContext::MPIContext() {
 
 int MPIContext::GetSize(MPI_Comm comm) {
   int size;
-  MPI_Comm_size(global_comm_, &size);
+  MPI_Comm_size(comm, &size);
   return size;
 }
 
 int MPIContext::GetRank(MPI_Comm comm) {
   int rank;
-  MPI_Comm_rank(global_comm_, &rank);
+  MPI_Comm_rank(comm, &rank);
   return rank;
 }
 

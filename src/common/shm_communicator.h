@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mpi.h>
 #include "communicator.h"
 #include <unordered_map>
 #include <vector>
@@ -62,9 +61,6 @@ private:
   std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> recv_resources;
   std::unordered_map<int, RecvRequest> recv_requests;
   bool initialized_ = false;
-  MPI_Comm comm_;
-  int rank_;
-  int world_size_;
 };
 
 } // namespace common

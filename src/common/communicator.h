@@ -1,6 +1,7 @@
 #pragma once
 #include "gpu_context.h"
 #include "common.h"
+#include <mpi.h>
 
 namespace qmpi {
 namespace common {
@@ -19,6 +20,9 @@ struct Communicator {
   virtual int TestRecv(int rank) = 0;
 protected:
   GPUContext *gpu_context_;
+  MPI_Comm comm_;
+  int rank_;
+  int world_size_;
 };
 
 } // namespace common

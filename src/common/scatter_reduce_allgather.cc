@@ -25,13 +25,12 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
   int64_t chunk_size = tensor_fusion_size_;
   chunk_size = utils::aligned_size((chunk_size + world_size - 1) / world_size);
   int64_t buffer_size = chunk_size * world_size +
-      +chunk_size * (world_size - 1) + chunk_size;
+      +chunk_size * (world_size - 1);
 
   buffer_ = std::make_unique<PersistentBuffer>(buffer_size);
   void *buffer_data = buffer_->RawPointer();
   gradients_send_ = static_cast<unsigned char *>(buffer_data);
   gradients_recv_ = gradients_send_ + chunk_size * world_size;
-  decompress_buffer_ = gradients_recv_ + chunk_size * (world_size - 1);
   streams_ = new gpuStream_t[world_size];
   for (int i = 0; i < world_size; i++) {
     gpu_context->StreamCreate(&streams_[i]);

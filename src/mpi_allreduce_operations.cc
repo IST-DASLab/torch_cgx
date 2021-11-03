@@ -3,10 +3,12 @@
 #include "common/compressor.h"
 #include "common/common.h"
 #include "common/scatter_reduce_allgather.h"
+#include "common/ring.h"
 #include "common/mpi_communicator.h"
 
 #if HAVE_CUDA
 #include "common/shm_communicator.h"
+#include "common/p2p_communicator.h"
 #endif
 
 namespace qmpi {
@@ -28,39 +30,68 @@ std::shared_ptr<common::Compressor> CreateCompressor(common::GPUContext *gpu_con
 }
 
 std::shared_ptr<common::Reducer>
+CreateReducer(common::GPUContext *gpu_context,
+              std::shared_ptr<common::Compressor> compressor,
+              std::shared_ptr<common::Communicator> communicator,
+              common::utils::ReductionType red_type, int world_size) {
+  if (red_type == common::utils::ReductionType::SRA) {
+    return std::make_shared<common::MPI_Allreduce_ScatterReduceAllgather>(
+        gpu_context, compressor, communicator, world_size);
+  } else {
+    return std::make_shared<common::MPI_Allreduce_Ring>(
+        gpu_context, compressor, communicator, world_size);
+  }
+}
+
+std::shared_ptr<common::Reducer>
 CreateInnerReducer(common::GPUContext *gpu_context,
                    std::shared_ptr<common::Compressor> compressor,
                    int world_size) {
-  auto comm_type = common::utils::GetCommTypeFromEnv(COMMUNICATOR_TYPE,
+  auto comm_type = common::utils::GetCommTypeFromEnv(INNER_COMMUNICATOR_TYPE,
                                                      common::utils::CommunicatorType::SHM);
   std::shared_ptr<common::Communicator> communicator;
 #if HAVE_CUDA
   if (comm_type == common::utils::CommunicatorType::SHM)
     communicator.reset(new common::SHMCommunicator(gpu_context));
-  else
+  else if (comm_type == common::utils::CommunicatorType::P2P)
+    communicator.reset(new common::P2PCommunicator(gpu_context));
 #endif
+  if (comm_type == common::utils::CommunicatorType::MPI)
     communicator.reset(new common::MPICommunicator(gpu_context));
-  return std::make_shared<common::MPI_Allreduce_ScatterReduceAllgather>(
-      gpu_context, compressor, communicator, world_size);
+  if (!communicator)
+    throw std::runtime_error("Communicator type is not supported");
+  auto red_type = common::utils::GetRedTypeFromEnv(INNER_REDUCTION_TYPE,
+                                                   common::utils::ReductionType::SRA);
+  return CreateReducer(gpu_context,
+                       compressor,
+                       communicator,
+                       red_type,
+                       world_size);
 }
 
 std::shared_ptr<common::Reducer>
 CreateCrossReducer(common::GPUContext *gpu_context,
                    std::shared_ptr<common::Compressor> compressor,
                    int world_size) {
-  return std::make_shared<common::MPI_Allreduce_ScatterReduceAllgather>(
-      gpu_context, compressor,
-      std::make_shared<common::MPICommunicator>(gpu_context), world_size);
+  auto red_type = common::utils::GetRedTypeFromEnv(CROSS_REDUCTION_TYPE,
+                                                   common::utils::ReductionType::Ring);
+  return CreateReducer(gpu_context,
+                       compressor,
+                       std::make_shared<common::MPICommunicator>(gpu_context),
+                       red_type,
+                       world_size);
 }
 
 MPIAllReduce_Operation::MPIAllReduce_Operation() {
   gpu_context_.SetDevice(mpi_context_.GetRank(mpi_context_.GetLocalComm()));
   compressor_ = CreateCompressor(&gpu_context_);
-  intra_reducer_ = CreateInnerReducer(&gpu_context_,
+  if (mpi_context_.GetSize(mpi_context_.GetLocalComm()) > 1)
+    intra_reducer_ = CreateInnerReducer(&gpu_context_,
                                       compressor_,
-                                      mpi_context_.GetSize(mpi_context_.GetGlobalComm()));
-  cross_reducer_ = CreateCrossReducer(&gpu_context_, compressor_,
-                                      mpi_context_.GetSize(mpi_context_.GetCrossComm()));
+                                      mpi_context_.GetSize(mpi_context_.GetLocalComm()));
+  if (mpi_context_.GetSize(mpi_context_.GetCrossComm()) > 1)
+    cross_reducer_ = CreateCrossReducer(&gpu_context_, compressor_,
+                                        mpi_context_.GetSize(mpi_context_.GetCrossComm()));
   unsigned int fusion_size_mb =
       common::utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB,
                                         FUSION_SIZE_DEFAULT_MB);
@@ -112,8 +143,6 @@ int MPIAllReduce_Operation::performOperation(std::vector<common::Layer> &layers,
   int max_buffer_size = tensor_fusion_threshold_ / layers[0].element_size();
   int num_elements = NumElements(layers);
   int status;
-//  if (mpi_context_.GetRank(mpi_context_.GetGlobalComm()) == 0)
-//    std::cout << "buffer size "  << num_elements << std::endl;
 
   if (num_elements < max_buffer_size) {
     return allReduce(num_elements, 0, layers, do_compression);

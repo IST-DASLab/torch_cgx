@@ -35,7 +35,6 @@ protected:
   std::unique_ptr<PersistentBuffer> buffer_;
   unsigned char *gradients_send_ = nullptr;
   unsigned char *gradients_recv_ = nullptr;
-  unsigned char *decompress_buffer_ = nullptr;
   size_t tensor_fusion_size_;
 };
 

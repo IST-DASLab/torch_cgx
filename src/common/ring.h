@@ -22,10 +22,7 @@ int AllreduceDivisionCompressed(int num_elements, int global_offset,
 int AllreduceDivisionUncompressed(int num_elements, int global_offset,
                                   std::vector<Layer> &layers,
                                   void *comm);
-int AllReduceAlltoAll(int num_elements, int global_offset,
-                      std::vector<Layer> &layers,
-                      void *comm);
-gpuStream_t* streams_;
+gpuStream_t stream_;
 };
 
 } // namespace common

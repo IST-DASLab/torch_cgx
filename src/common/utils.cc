@@ -33,8 +33,23 @@ CommunicatorType GetCommTypeFromEnv(const char* env, CommunicatorType default_va
     return CommunicatorType::MPI;
   else if (env_value_str == "SHM")
     return CommunicatorType::SHM;
+  else if (env_value_str == "P2P")
+    return CommunicatorType::P2P;
   else
     throw std::runtime_error("Unknown type of communicator");
+}
+
+ReductionType GetRedTypeFromEnv(const char* env, ReductionType default_value) {
+  auto env_value = std::getenv(env);
+  if (env_value == nullptr)
+    return default_value;
+  auto env_value_str = std::string(env_value);
+  if (env_value_str == "SRA")
+    return ReductionType::SRA;
+  else if (env_value_str == "Ring")
+    return ReductionType::Ring;
+  else
+    throw std::runtime_error("Unknown type of reduction");
 }
 
 size_t get_sizeof(at::ScalarType dtype) {
