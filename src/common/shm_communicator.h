@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mpi.h>
 #include "communicator.h"
 #include <unordered_map>
 #include <vector>
@@ -18,6 +17,8 @@ struct SHMCommunicator : public Communicator {
                      gpuStream_t stream) override;
   virtual void IRecv(void *buf, size_t buf_size, int peer_rank,
                      gpuStream_t stream) override;
+  virtual void WaitSend(int rank) override;
+  virtual void WaitRecv(int rank) override;
   virtual void WaitAllSend() override;
   virtual void WaitAllRecv() override;
   virtual int TestRecv(int rank) override;
@@ -60,9 +61,6 @@ private:
   std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> recv_resources;
   std::unordered_map<int, RecvRequest> recv_requests;
   bool initialized_ = false;
-  MPI_Comm comm_;
-  int rank_;
-  int world_size_;
 };
 
 } // namespace common

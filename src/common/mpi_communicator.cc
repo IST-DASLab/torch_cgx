@@ -5,8 +5,10 @@ namespace common {
 
 void MPICommunicator::Init(int world_size, void* ctx) {
   if (recv_requests.size() == 0) {
-    for (int i = 0; i < world_size; i++)
-      recv_requests.push_back(MPI_Request());
+    for (int i = 0; i < world_size; i++) {
+      recv_requests.push_back(MPI_REQUEST_NULL);
+      send_requests.push_back(MPI_REQUEST_NULL);
+    }
   }
   comm_ = *(static_cast<MPI_Comm *>(ctx));
   MPI_CHECK(MPI_Comm_rank(comm_, &rank_));
@@ -27,16 +29,17 @@ void MPICommunicator::ISend(void *buf,
                             size_t buf_size,
                             int peer_rank,
                             gpuStream_t stream) {
-  send_requests.push_back(MPI_Request());
   gpu_context_->StreamSynchronize(stream);
   MPI_CHECK(MPI_Isend(buf, buf_size, MPI_UNSIGNED_CHAR,
-                      peer_rank, 0, comm_, &send_requests.back()));
+                      peer_rank, 0, comm_, &send_requests.at(peer_rank)));
 }
 
 void MPICommunicator::WaitAllSend() {
-  MPI_CHECK(MPI_Waitall((int) send_requests.size(), send_requests.data(),
-                        MPI_STATUSES_IGNORE));
-  send_requests.clear();
+  for (int peer_rank = 0; peer_rank < world_size_; peer_rank++){
+    if (send_requests.at(peer_rank) == MPI_REQUEST_NULL)
+      continue;
+    MPI_CHECK(MPI_Wait(&send_requests.at(peer_rank), MPI_STATUSES_IGNORE));
+  }
 }
 
 int MPICommunicator::TestRecv(int peer_rank) {
@@ -49,9 +52,17 @@ int MPICommunicator::TestRecv(int peer_rank) {
   return flag;
 }
 
+void MPICommunicator::WaitRecv(int peer_rank) {
+  MPI_CHECK(MPI_Wait(&recv_requests.at(peer_rank), MPI_STATUSES_IGNORE));
+}
+
+void MPICommunicator::WaitSend(int peer_rank) {
+  MPI_CHECK(MPI_Wait(&send_requests.at(peer_rank), MPI_STATUSES_IGNORE));
+}
+
 void MPICommunicator::WaitAllRecv() {
   for (int peer_rank = 0; peer_rank < world_size_; peer_rank++){
-    if (peer_rank == rank_)
+    if (send_requests.at(peer_rank) == MPI_REQUEST_NULL)
       continue;
     MPI_CHECK(MPI_Wait(&recv_requests.at(peer_rank), MPI_STATUSES_IGNORE));
   }

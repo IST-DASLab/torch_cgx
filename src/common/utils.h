@@ -8,7 +8,13 @@ namespace utils {
 
 enum CommunicatorType {
   MPI,
-  SHM
+  SHM,
+  P2P
+};
+
+enum ReductionType {
+  SRA,
+  Ring
 };
 
 const size_t ALIGNMENT_UNIT = 2 * sizeof(float);
@@ -25,6 +31,7 @@ size_t round_to(size_t x, size_t m);
 size_t aligned_size(size_t size);
 
 CommunicatorType GetCommTypeFromEnv(const char* env, CommunicatorType default_value);
+ReductionType GetRedTypeFromEnv(const char* env, ReductionType default_value);
 
 } // namespace utils
 } // namespace common

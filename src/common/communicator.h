@@ -1,6 +1,7 @@
 #pragma once
 #include "gpu_context.h"
 #include "common.h"
+#include <mpi.h>
 
 namespace qmpi {
 namespace common {
@@ -12,11 +13,16 @@ struct Communicator {
                      gpuStream_t stream) = 0;
   virtual void IRecv(void* buf, size_t buf_size, int peer_rank,
                      gpuStream_t stream) = 0;
+  virtual void WaitSend(int rank) = 0;
+  virtual void WaitRecv(int rank) = 0;
   virtual void WaitAllSend() = 0;
   virtual void WaitAllRecv() = 0;
   virtual int TestRecv(int rank) = 0;
 protected:
   GPUContext *gpu_context_;
+  MPI_Comm comm_;
+  int rank_;
+  int world_size_;
 };
 
 } // namespace common
