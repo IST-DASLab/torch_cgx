@@ -16,12 +16,17 @@ public:
                         std::vector<Layer> &tensors,
                         void *comm, bool do_compression) override;
 private:
-  int AllreduceDivisionCompressed(int num_elements, int global_offset,
+  int AllreduceCompressed(int num_elements, int global_offset,
                         std::vector<Layer> &layers,
                         void *comm);
-  int AllreduceDivisionUncompressed(int num_elements, int global_offset,
+  int AllreduceUncompressed(int num_elements, int global_offset,
                         std::vector<Layer> &layers,
                         void *comm);
+  int AllreduceCompressedRemoteBuf(int num_elements,
+                               int global_offset,
+                               std::vector<
+                                   Layer> &layers,
+                               void *comm_p);
   int AllReduceAlltoAll(int num_elements, int global_offset,
                         std::vector<Layer> &layers,
                         void *comm);

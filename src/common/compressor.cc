@@ -9,7 +9,6 @@ std::set<std::string> Compressor::ignore_modules;
 std::unordered_map<std::string, CompressionLayerConfig>
     Compressor::layers_configs;
 
-
 Compressor::Compressor(GPUContext *gpu_context) : gpu_context_(gpu_context) {
   unsigned int fusion_size_mb =
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
@@ -169,12 +168,12 @@ void Compressor::Decompress(
 }
 
 void Compressor::GetSizesAndOffsets(
-    int num_elements, int world_size,
+    int num_elements, int world_size, int global_offset,
     const std::vector<Layer> &layers, std::vector<int> &offsets,
     std::vector<int> &sizes) {
   int residue = num_elements % world_size;
   int num_elems_per_node = num_elements / world_size;
-  int offset = 0;
+  int offset = global_offset;
   for (int rank = 0; rank < world_size; rank++) {
     sizes.push_back(num_elems_per_node + ((rank < residue) ? 1 : 0));
     offsets.push_back(offset);
@@ -275,10 +274,11 @@ void Quantizer::ResetParamsFromEnv() {
 }
 
 void Quantizer::GetSizesAndOffsets(int num_elements, int world_size,
+                                   int global_offset,
                                    const std::vector<Layer> &layers,
                                    std::vector<int> &offsets,
                                    std::vector<int> &sizes) {
-  int offset = 0;
+  int offset = global_offset;
   int num_per_node;
   auto it = layers.begin();
   int entry_offset = 0;
@@ -329,12 +329,26 @@ size_t MaxMinQuantizer::CompressBuffer(
   if (num_elems_to_compress > 0) {
     if (dtype != at::kHalf) {
       gpu::quantize_maxmin<float>(
-          input, output, feedback, num_elems_to_compress, bits, bucket_size,
-          rand_states_, stream);
+          input,
+          output,
+          feedback,
+          meta_info_,
+          num_elems_to_compress,
+          bits,
+          bucket_size,
+          rand_states_,
+          stream);
     } else {
       gpu::quantize_maxmin<gpu::Half>(
-          input, output, feedback, num_elems_to_compress, bits, bucket_size,
-          rand_states_, stream);
+          input,
+          output,
+          feedback,
+          meta_info_,
+          num_elems_to_compress,
+          bits,
+          bucket_size,
+          rand_states_,
+          stream);
     }
     gpu_context_->StreamSynchronize(stream);
     compressed_size =
@@ -370,19 +384,23 @@ void MaxMinQuantizer::DecompressBuffer(unsigned char *input,
   if (num_elems_to_decompress > 0) {
     if (add) {
       if (dtype != at::kHalf) {
-        gpu::dequantize_maxmin<float, true>(
-            input, output, num_elems_to_decompress, bits, bucket_size, stream);
+        gpu::dequantize_maxmin<float, true>(input, output, meta_info_,
+                                            num_elems_to_decompress, bits,
+                                            bucket_size, stream);
       } else {
-        gpu::dequantize_maxmin<gpu::Half, true>(
-            input, output, num_elems_to_decompress, bits, bucket_size, stream);
+        gpu::dequantize_maxmin<gpu::Half, true>(input, output, meta_info_,
+                                                num_elems_to_decompress, bits,
+                                                bucket_size, stream);
       }
     } else {
       if (dtype != at::kHalf) {
-        gpu::dequantize_maxmin<float, false>(
-            input, output, num_elems_to_decompress, bits, bucket_size, stream);
+        gpu::dequantize_maxmin<float, false>(input, output, meta_info_,
+                                             num_elems_to_decompress, bits,
+                                             bucket_size, stream);
       } else {
-        gpu::dequantize_maxmin<gpu::Half, false>(
-            input, output, num_elems_to_decompress, bits, bucket_size, stream);
+        gpu::dequantize_maxmin<gpu::Half, false>(input, output, meta_info_,
+                                                 num_elems_to_decompress, bits,
+                                                 bucket_size, stream);
       }
     }
   }
@@ -448,12 +466,17 @@ bool MaxMinQuantizer::isEnabled(const Layer &layer) {
 void MaxMinQuantizer::Init(int element_size, gpuStream_t stream) {
   int max_num_elems = tensor_fusion_size_ / element_size;
   size_t randstates_sizes = gpu::get_curand_array_size(max_num_elems);
-  if (!cuda_states_buffer_) {
-    cuda_states_buffer_ = std::make_unique<PersistentBuffer>(randstates_sizes);
+  size_t metainfo_buf_size = (max_num_elems + default_config.bucket_size - 1)
+      / default_config.bucket_size;
+  if (!aux_buffer_) {
+    aux_buffer_ = std::make_unique<PersistentBuffer>(
+        randstates_sizes + metainfo_buf_size);
     rand_states_ =
-        static_cast<gpu::RandState *>(cuda_states_buffer_->RawPointer());
+        static_cast<gpu::RandState *>(aux_buffer_->RawPointer());
+    meta_info_ = static_cast<unsigned char *>(aux_buffer_->RawPointer())
+        + randstates_sizes;
+    gpu::init_rand_states(rand_states_, max_num_elems, time(NULL), stream);
   }
-  gpu::init_rand_states(rand_states_, max_num_elems, time(NULL), stream);
 }
 
 } // namespace common

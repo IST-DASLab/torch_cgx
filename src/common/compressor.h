@@ -66,7 +66,7 @@ public:
                                 at::ScalarType dtype,
                                 bool add, const CompressionLayerConfig &config,
                                 gpuStream_t stream) = 0;
-  static void GetSizesAndOffsets(int num_elements, int world_size,
+  static void GetSizesAndOffsets(int num_elements, int world_size, int global_offset,
                                  const std::vector<Layer> &entries,
                                  std::vector<int> &offsets,
                                  std::vector<int> &sizes);
@@ -105,13 +105,16 @@ class Quantizer : public Compressor {
 public:
   explicit Quantizer(GPUContext *gpu_context);
   static void GetSizesAndOffsets(int num_elements, int world_size,
+                                 int global_offset,
                                  const std::vector<Layer> &tensors,
                                  std::vector<int> &offsets,
                                  std::vector<int> &sizes);
   virtual void ResetParamsFromEnv() override;
 protected:
   gpu::RandState *rand_states_;
-  std::unique_ptr<PersistentBuffer> cuda_states_buffer_;
+  // Compute info locally before sending it. (For p2p and shm communicators)
+  unsigned char* meta_info_;
+  std::unique_ptr<PersistentBuffer> aux_buffer_;
 };
 
 class DummyCompressor : public Compressor {

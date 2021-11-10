@@ -56,7 +56,7 @@ int MPI_Allreduce_Ring::AllreduceDivisionUncompressed(int num_elements,
 
   MPI_CHECK(MPI_Comm_size(comm, &world_size));
   MPI_CHECK(MPI_Comm_rank(comm, &rank));
-  Quantizer::GetSizesAndOffsets(num_elements, world_size, layers, offsets,
+  Quantizer::GetSizesAndOffsets(num_elements, world_size, global_offset, layers, offsets,
                                 chunk_sizes);
   communicator_->Init(world_size, comm_p);
   if (layers.size() > 1) {
@@ -147,7 +147,7 @@ int MPI_Allreduce_Ring::AllreduceDivisionCompressed(int num_elements,
   MPI_CHECK(MPI_Comm_rank(comm, &rank));
   std::vector<int> chunk_sizes, offsets;
   gpuStream_t stream = stream_;
-  Quantizer::GetSizesAndOffsets(num_elements, world_size, layers, offsets,
+  Quantizer::GetSizesAndOffsets(num_elements, world_size, global_offset, layers, offsets,
                                 chunk_sizes);
   communicator_->Init(world_size, comm_p);
   compressor_->Init(layers[0].element_size(), stream);

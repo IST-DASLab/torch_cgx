@@ -8,7 +8,9 @@ namespace qmpi {
 namespace common {
 
 struct SHMCommunicator : public Communicator {
-  SHMCommunicator(GPUContext* gpu_context) : Communicator(gpu_context) {}
+  SHMCommunicator(GPUContext* gpu_context) : Communicator(gpu_context){
+    communicator_type_ = CommunicatorType::SHM;
+  }
 
   ~SHMCommunicator();
 
@@ -22,12 +24,16 @@ struct SHMCommunicator : public Communicator {
   virtual void WaitAllSend() override;
   virtual void WaitAllRecv() override;
   virtual int TestRecv(int rank) override;
+  virtual void* GetRemoteBuftoSend(int peer_rank) override;
+  virtual void* GetRemoteBuftoRecv(int peer_rank) override;
+  virtual void* GetRemoteBroadcastBuftoSend() override;
+  virtual void* GetRemoteBroadcastBuftoRecv(int peer_rank) override;
 
 private:
   struct gpuEventSync {
     gpuEvent_t event;
     gpuIpcEventHandle_t eventHandle;
-    MPI_Request request;
+    MPI_Request request = MPI_REQUEST_NULL;
     unsigned char dummy;
   };
 
@@ -48,7 +54,9 @@ private:
   // Calls to sendInit and recvInit
   // must be separated with MPI_Barrier.
   void sendInit(shmBuffer* resource, int peer_rank, size_t shm_size);
-  void recvInit(shmBuffer* resource, int peer_rank, size_t shm_size);
+  void recvInit(shmBuffer* resource, int peer_rank, size_t shm_size,
+                bool broadcast);
+  void cleanupBroadcast();
   // Initialize IPC primitives.
   void initEventSend(gpuEventSync* eventSync, int recv_rank,
                      MPI_Request* request);
@@ -59,6 +67,7 @@ private:
 
   std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> send_resources;
   std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> recv_resources;
+  std::unordered_map<int, std::pair<shmBuffer, gpuEventSync>> broadcast_recv_resources;
   std::unordered_map<int, RecvRequest> recv_requests;
   bool initialized_ = false;
 };

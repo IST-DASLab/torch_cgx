@@ -569,14 +569,18 @@ void CUDA_float2half(float *input,
 
 template<typename T, bool EF, int BITS, bool VECTORIZE>
 inline void QUANTIZE2(unsigned char *input_data, unsigned char *output_data,
-                     unsigned char *feedback_data, int num_elems,
-                     int bucket_size, RandState *states, cudaStream_t stream) {
+                     unsigned char *feedback_data, unsigned char* util_buf,
+                     int num_elems, int bucket_size,
+                     RandState *states, cudaStream_t stream) {
   int num_blocks =
       umin((num_elems + 4 * bucket_size - 1) / (4 * bucket_size), MAX_NUMBER_OF_BLOCKS);
   int num_threads = umin(THREADS_PER_BLOCK_COMPRESS, bucket_size);
   int shared_memory_block_size = 2 * num_threads * sizeof(T);
-
-  find_meta<T, BITS><<<num_blocks, num_threads, shared_memory_block_size, stream>>>((T*)input_data, output_data, num_elems, bucket_size);
+  unsigned int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
+  unsigned char* meta_info = output_data;
+  const int META_MULTIPLIER = 2;
+  find_meta<T, BITS><<<num_blocks, num_threads, shared_memory_block_size, stream>>>((T*)input_data, util_buf, num_elems, bucket_size);
+  cudaMemcpyAsync(output_data, util_buf, META_MULTIPLIER * sizeof(T) * num_buckets, cudaMemcpyDeviceToDevice, stream);
   num_threads = THREADS_PER_BLOCK_DECOMPRESS;
   num_blocks = BLOCKS_PER_GRID(num_elems / PACK_SIZE, num_threads);
   pack_array<T, EF, BITS, VECTORIZE><<<num_blocks, num_threads, 0, stream>>>(input_data, output_data, feedback_data, num_elems, bucket_size,
@@ -585,48 +589,49 @@ inline void QUANTIZE2(unsigned char *input_data, unsigned char *output_data,
 
 template<typename T, bool EF, bool VECTORIZE>
 inline void QUANTIZE1(unsigned char *input_data, unsigned char *output_data,
-                     unsigned char *feedback_data, int num_elems, int bits,
-                     int bucket_size, RandState *states, cudaStream_t stream) {
+                     unsigned char *feedback_data, unsigned char* util_buf,
+                     int num_elems, int bits, int bucket_size,
+                     RandState *states, cudaStream_t stream) {
   switch (bits) {
     case 1:
       QUANTIZE2<T, EF, 1, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 2:
       QUANTIZE2<T, EF, 2, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 3:
       QUANTIZE2<T, EF, 3, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 4:
       QUANTIZE2<T, EF, 4, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 5:
       QUANTIZE2<T, EF, 5, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 6:
       QUANTIZE2<T, EF, 6, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 7:
       QUANTIZE2<T, EF, 7, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     case 8:
       QUANTIZE2<T, EF, 8, VECTORIZE>(
-          input_data, output_data, feedback_data, num_elems, bucket_size,
-          states, stream);
+          input_data, output_data, feedback_data, util_buf, num_elems,
+          bucket_size, states, stream);
       break;
     default:printf("Wrong number of bits %i!!!\n", bits);
   }
@@ -636,8 +641,9 @@ inline void QUANTIZE1(unsigned char *input_data, unsigned char *output_data,
 
 template<typename T, bool EF, bool VECTORIZE>
 inline void QUANTIZE(unsigned char *input_data, unsigned char *output_data,
-                     unsigned char *feedback_data, int num_elems, int bits,
-                     int bucket_size, RandState *states, cudaStream_t stream) {
+                     unsigned char *feedback_data, unsigned char* util_buf,
+                     int num_elems, int bits, int bucket_size,
+                     RandState *states, cudaStream_t stream) {
   int num_blocks =
       umin((num_elems + bucket_size - 1) / bucket_size, MAX_NUMBER_OF_BLOCKS);
   int num_threads = umin(THREADS_PER_BLOCK_COMPRESS, bucket_size);
@@ -698,18 +704,19 @@ inline void QUANTIZE(unsigned char *input_data, unsigned char *output_data,
 
 template<typename T>
 void CUDA_quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
-                          unsigned char *feedback_data, int num_elems, int bits,
+                          unsigned char *feedback_data, unsigned char* util_buf,
+                          int num_elems, int bits,
                           int bucket_size, RandState *states,
                           cudaStream_t stream) {
   // if the buffer is not aligned for vectorized, fallback to non-vectorized
   if (VECTORIZE_COMPRESS and (((unsigned long)input_data & 15) == 0))
     QUANTIZE1<T, false, true>(
-        input_data, output_data, feedback_data, num_elems, bits, bucket_size,
-        states, stream);
+        input_data, output_data, feedback_data, util_buf, num_elems, bits,
+        bucket_size, states, stream);
   else
     QUANTIZE1<T, false, false>(
-        input_data, output_data, feedback_data, num_elems, bits, bucket_size,
-        states, stream);
+        input_data, output_data, feedback_data, util_buf, num_elems, bits,
+        bucket_size, states, stream);
 
 }
 
@@ -773,15 +780,18 @@ void DEQUANTIZE1(unsigned char *input, unsigned char *meta_info,
 
 template<typename T, bool ADD>
 void CUDA_dequantize_maxmin(unsigned char *input_data,
-                            unsigned char *output_data, int num_elems, int bits,
+                            unsigned char *output_data, unsigned char* util_buf,
+                            int num_elems, int bits,
                             int bucket_size, cudaStream_t stream) {
   T *output = (T *) output_data;
   unsigned char *meta_info = input_data;
   int num_buckets = (num_elems + bucket_size - 1) / bucket_size;
   unsigned char *input = input_data + 2 * sizeof(T) * num_buckets;
   int num_threads = THREADS_PER_BLOCK_DECOMPRESS;
+  cudaMemcpyAsync(util_buf, meta_info, 2 * sizeof(T) * num_buckets,
+                  cudaMemcpyDeviceToDevice, stream);
   int num_blocks = BLOCKS_PER_GRID(num_elems / PACK_SIZE, num_threads);
-  DEQUANTIZE1<T, ADD>(input, meta_info, output, num_elems, bucket_size, bits,
+  DEQUANTIZE1<T, ADD>(input, util_buf, output, num_elems, bucket_size, bits,
                      stream, num_blocks, num_threads);
 }
 
@@ -794,34 +804,40 @@ template void CUDA_add<Half>(int n, const Half *x, Half *y, Half *sum,
 template void CUDA_quantize_maxmin<float>(unsigned char *input_data,
                                           unsigned char *output_data,
                                           unsigned char *feedback_data,
+                                          unsigned char* util_buf,
                                           int num_elems, int bits,
                                           int bucket_size, RandState *states,
                                           cudaStream_t stream);
 template void CUDA_quantize_maxmin<Half>(unsigned char *input_data,
                                          unsigned char *output_data,
                                          unsigned char *feedback_data,
+                                         unsigned char* util_buf,
                                          int num_elems, int bits,
                                          int bucket_size, RandState *states,
                                          cudaStream_t stream);
 
 template void CUDA_dequantize_maxmin<float, true>(unsigned char *input_data,
                                                   unsigned char *output_data,
+                                                  unsigned char* util_buf,
                                                   int num_elems, int bits,
                                                   int bucket_size,
                                                   cudaStream_t stream);
 template void CUDA_dequantize_maxmin<float, false>(unsigned char *input_data,
                                                    unsigned char *output_data,
+                                                   unsigned char* util_buf,
                                                    int num_elems, int bits,
                                                    int bucket_size,
                                                    cudaStream_t stream);
 
 template void CUDA_dequantize_maxmin<Half, true>(unsigned char *input_data,
                                                  unsigned char *output_data,
+                                                 unsigned char* util_buf,
                                                  int num_elems, int bits,
                                                  int bucket_size,
                                                  cudaStream_t stream);
 template void CUDA_dequantize_maxmin<Half, false>(unsigned char *input_data,
                                                   unsigned char *output_data,
+                                                  unsigned char* util_buf,
                                                   int num_elems, int bits,
                                                   int bucket_size,
                                                   cudaStream_t stream);

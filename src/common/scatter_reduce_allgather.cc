@@ -2,10 +2,8 @@
 
 #include "compression/gpu_common.h"
 
-
 namespace qmpi {
 namespace common {
-
 
 void printDebug(unsigned char *buf, int numel) {
   float *host_buf = new float[numel];
@@ -15,11 +13,13 @@ void printDebug(unsigned char *buf, int numel) {
   }
   std::cout << std::endl;
   CUDA_CHECK(cudaGetLastError());
+  delete []host_buf;
 }
 
 MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
     GPUContext *gpu_context,
-    std::shared_ptr<Compressor> compressor, std::shared_ptr<Communicator> communicator,
+    std::shared_ptr<Compressor> compressor,
+    std::shared_ptr<Communicator> communicator,
     int world_size)
     : MPIReducer(gpu_context, compressor, communicator) {
   int64_t chunk_size = tensor_fusion_size_;
@@ -45,40 +45,52 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
   MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
   int status;
   if (do_compression) {
-    status = AllreduceDivisionCompressed(num_elements,
-                                       global_offset,
-                                       layers,
-                                       comm_p);
+    if (communicator_->GetType() == Communicator::MPI) {
+//    if (true) {
+      status = AllreduceCompressed(num_elements,
+                                   global_offset,
+                                   layers,
+                                   comm_p);
 //    status = AllReduceAlltoAll(num_elements,
 //                               global_offset,
 //                               layers,
 //                               comm_p);
+    } else {
+      status = AllreduceCompressedRemoteBuf(num_elements,
+                                            global_offset,
+                                            layers,
+                                            comm_p);
+    }
   } else {
-    status = AllreduceDivisionUncompressed(num_elements,
-                                           global_offset,
-                                           layers,
-                                           comm_p);
+    status = AllreduceUncompressed(num_elements,
+                                   global_offset,
+                                   layers,
+                                   comm_p);
   }
   MPI_CHECK(MPI_Barrier(comm));
   return status;
 }
 
 // Perform Scatter-Reduce-AllGather (SRA)
-int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_elements,
-                                                                      int global_offset,
-                                                                      std::vector<
-                                                                          Layer> &layers,
-                                                                      void *comm_p) {
+int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressed(int num_elements,
+                                                              int global_offset,
+                                                              std::vector<
+                                                                  Layer> &layers,
+                                                              void *comm_p) {
   MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
   int world_size, rank;
   MPI_CHECK(MPI_Comm_size(comm, &world_size));
   MPI_CHECK(MPI_Comm_rank(comm, &rank));
   std::vector<int> chunk_sizes, offsets;
-  Quantizer::GetSizesAndOffsets(num_elements, world_size, layers, offsets,
+  Quantizer::GetSizesAndOffsets(num_elements,
+                                world_size,
+                                global_offset,
+                                layers,
+                                offsets,
                                 chunk_sizes);
   communicator_->Init(world_size, comm_p);
   compressor_->Init(layers[0].element_size(), streams_[0]);
-  int start_elem = offsets[rank] + global_offset;
+  int start_elem = offsets[rank];
   int recv_num_elems = chunk_sizes[rank];
   int recv_compressed_size = utils::aligned_size(
       compressor_->BufferSize(recv_num_elems, layers, start_elem));
@@ -86,8 +98,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
   int send_compressed_size = 0;
   unsigned char *send_buf = gradients_send_;
   unsigned char *recv_buf = gradients_recv_;
-  std::vector<MPI_Request> send_requests;
-  std::vector<MPI_Request> recv_requests;
   std::queue<int> send_sizes;
   std::vector<int> nodes;
   for (int node_rank = 0; node_rank < world_size; node_rank++) {
@@ -99,7 +109,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
 
     send_compressed_size = utils::aligned_size(
         compressor_->Compress(send_buf, layers, start_offset,
-                          send_num_elems, streams_[node_rank]));
+                              send_num_elems, streams_[node_rank]));
     send_buf += send_compressed_size;
     send_sizes.push(send_compressed_size);
   }
@@ -153,7 +163,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
     if (node_rank == rank) {
       continue;
     }
-    int their_start_offset = offsets[node_rank] + global_offset;
+    int their_start_offset = offsets[node_rank];
     recv_num_elems = chunk_sizes[node_rank];
     recv_compressed_size = utils::aligned_size(
         compressor_->BufferSize(recv_num_elems, layers, their_start_offset));
@@ -195,6 +205,104 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionCompressed(int num_el
   for (int i = 0; i < world_size; i++) {
     gpu_context_->StreamSynchronize(streams_[i]);
   }
+  return 0;
+}
+
+int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressedRemoteBuf(int num_elements,
+                                                                       int global_offset,
+                                                                       std::vector<
+                                                                           Layer> &layers,
+                                                                       void *comm_p) {
+  MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
+  int world_size, rank;
+  MPI_CHECK(MPI_Comm_size(comm, &world_size));
+  MPI_CHECK(MPI_Comm_rank(comm, &rank));
+  std::vector<int> chunk_sizes, offsets;
+  Quantizer::GetSizesAndOffsets(num_elements,
+                                world_size,
+                                global_offset,
+                                layers,
+                                offsets,
+                                chunk_sizes);
+  communicator_->Init(world_size, comm_p);
+  compressor_->Init(layers[0].element_size(), streams_[0]);
+  int start_elem, num_elems;
+  int send_compressed_size = 0;
+  unsigned char *send_buf = gradients_send_;
+
+  unsigned char *remote_buf;
+  for (int node_rank = 0; node_rank < world_size; node_rank++) {
+    if (node_rank == rank) {
+      continue;
+    }
+
+    start_elem = offsets[node_rank];
+    num_elems = chunk_sizes[node_rank];
+    remote_buf =
+        static_cast<unsigned char *>(communicator_->GetRemoteBuftoSend(node_rank));
+    send_compressed_size = utils::aligned_size(compressor_->Compress(remote_buf, layers, start_elem,
+                          num_elems, streams_[node_rank]));
+  }
+  for (int i = 0; i < world_size; i++) {
+    gpu_context_->StreamSynchronize(streams_[i]);
+  }
+  communicator_->Barrier();
+  start_elem = offsets[rank];
+  num_elems = chunk_sizes[rank];
+  int recv_compressed_size = utils::aligned_size(
+      compressor_->BufferSize(chunk_sizes[rank], layers, offsets[rank]));
+  for (int node_rank = 0; node_rank < world_size; node_rank++) {
+    if (node_rank == rank) {
+      continue;
+    }
+    remote_buf =
+        static_cast<unsigned char *>(communicator_->GetRemoteBuftoRecv(node_rank));
+
+    compressor_->Decompress(remote_buf,
+                            layers, start_elem, num_elems,
+                            true, streams_[rank]);
+  }
+  // End of the first round.
+  remote_buf =
+      static_cast<unsigned char *>(communicator_->GetRemoteBroadcastBuftoSend());
+  send_compressed_size =
+      utils::aligned_size(compressor_->Compress(gradients_send_,
+                                                layers,
+                                                start_elem,
+                                                num_elems,
+                                                streams_[rank]));
+  compressor_->Decompress(gradients_send_, layers, start_elem,
+                          num_elems, false, streams_[rank]);
+  gpu_context_->MemcpyAsyncD2D(remote_buf,
+                               gradients_send_,
+                               send_compressed_size,
+                               streams_[rank]);
+  gpu_context_->StreamSynchronize(streams_[rank]);
+  communicator_->Barrier();
+//  if (rank == 0)
+//    printDebug(remote_buf, 8);
+  // Need to implement broadcasting with shm and p2p.
+  for (int node_rank = 0; node_rank < world_size; node_rank++) {
+    if (node_rank == rank)
+      continue;
+    remote_buf =
+        static_cast<unsigned char *>(communicator_->GetRemoteBroadcastBuftoRecv(
+            node_rank));
+    start_elem = offsets[node_rank];
+    num_elems = chunk_sizes[node_rank];
+//    if (rank == 1)
+//      printDebug(remote_buf, 8);
+    compressor_->Decompress(remote_buf,
+                            layers,
+                            start_elem,
+                            num_elems,
+                            false,
+                            streams_[node_rank]);
+  }
+  for (int i = 0; i < world_size; i++) {
+    gpu_context_->StreamSynchronize(streams_[i]);
+  }
+  communicator_->Barrier();
   return 0;
 }
 
@@ -245,18 +353,22 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAll(int num_elements,
   return 0;
 }
 
-int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_elements,
-                                                                        int global_offset,
-                                                                        std::vector<
-                                                                            Layer> &layers,
-                                                                        void *comm_p) {
+int MPI_Allreduce_ScatterReduceAllgather::AllreduceUncompressed(int num_elements,
+                                                                int global_offset,
+                                                                std::vector<
+                                                                    Layer> &layers,
+                                                                void *comm_p) {
   MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
   int world_size, rank;
   MPI_CHECK(MPI_Comm_size(comm, &world_size));
   MPI_CHECK(MPI_Comm_rank(comm, &rank));
   int element_size = layers[0].element_size();
   std::vector<int> chunk_sizes, offsets;
-  Compressor::GetSizesAndOffsets(num_elements, world_size, layers, offsets,
+  Compressor::GetSizesAndOffsets(num_elements,
+                                 world_size,
+                                 global_offset,
+                                 layers,
+                                 offsets,
                                  chunk_sizes);
   int send_size;
   int recv_num_elems = chunk_sizes[rank];
@@ -277,8 +389,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
     }
     send_buf = send_buf_base;
   } else {
-    send_buf = static_cast<unsigned char *>(layers[0].data_ptr())
-        + element_size * global_offset;
+    send_buf = static_cast<unsigned char *>(layers[0].data_ptr());
     send_buf_base = send_buf;
   }
   gpu_context_->StreamSynchronize(gpu_stream);
@@ -307,7 +418,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivisionUncompressed(int num_
           recv_buf = gradients_recv_ + recv_size * idx;
 
           Compressor::Add(recv_num_elems, send_buf, recv_buf, send_buf,
-                           layers[0].scalar_type(), gpu_stream);
+                          layers[0].scalar_type(), gpu_stream);
           nodes.erase(nodes.begin() + i);
         }
       }

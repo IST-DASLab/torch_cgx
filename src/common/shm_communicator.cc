@@ -21,6 +21,8 @@ SHMCommunicator::~SHMCommunicator() {
   // Can't deallocate buffers here, because at this point destuctor is called
   // CUDA driver is in the middle of deinitialization.
   for (auto &resource : send_resources) {
+    if (resource.first == rank_)
+      continue;
     freeEventSync(&resource.second.second);
     //    freeBuffer(&resource.second.first);
   }
@@ -48,8 +50,6 @@ void SHMCommunicator::Init(int world_size, void *ctx) {
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
   // Initialize shared memory buffers.
   for (int peer_rank = 0; peer_rank < world_size; peer_rank++) {
-    if (peer_rank == rank_)
-      continue;
     auto &send_resource = send_resources[peer_rank];
     sendInit(&send_resource.first, peer_rank, buf_size);
   }
@@ -58,9 +58,12 @@ void SHMCommunicator::Init(int world_size, void *ctx) {
     if (peer_rank == rank_)
       continue;
     auto &recv_resource = recv_resources[peer_rank];
-    recvInit(&recv_resource.first, peer_rank, buf_size);
+    recvInit(&recv_resource.first, peer_rank, buf_size, false);
+    auto &broadcast_recv_resource = broadcast_recv_resources[peer_rank];
+    recvInit(&broadcast_recv_resource.first, peer_rank, buf_size, true);
   }
-
+  MPI_Barrier(comm_);
+  cleanupBroadcast();
   // Initialize IPC primitives.
   std::vector<MPI_Request> send_requests;
   int count = 0;
@@ -184,6 +187,30 @@ void SHMCommunicator::WaitSend(int rank) {
   MPI_Wait(&eventSync.request, MPI_STATUSES_IGNORE);
 }
 
+void * SHMCommunicator::GetRemoteBuftoSend(int peer_rank) {
+  auto &send_resource = send_resources.at(peer_rank);
+  auto &shm_buf = send_resource.first;
+  return shm_buf.devHostMem;
+}
+
+void * SHMCommunicator::GetRemoteBuftoRecv(int peer_rank) {
+  auto &recv_resource = recv_resources.at(peer_rank);
+  auto &shm_buf = recv_resource.first;
+  return shm_buf.devHostMem;
+}
+
+void* SHMCommunicator::GetRemoteBroadcastBuftoSend() {
+  auto &send_resource = send_resources.at(rank_);
+  auto &shm_buf = send_resource.first;
+  return shm_buf.devHostMem;
+}
+
+void* SHMCommunicator::GetRemoteBroadcastBuftoRecv(int peer_rank) {
+  auto &recv_resource = broadcast_recv_resources.at(peer_rank);
+  auto &shm_buf = recv_resource.first;
+  return shm_buf.devHostMem;
+}
+
 void SHMCommunicator::sendInit(shmBuffer *buffer,
                                int peer_rank,
                                size_t shm_size) {
@@ -200,17 +227,24 @@ void SHMCommunicator::sendInit(shmBuffer *buffer,
 
 void SHMCommunicator::recvInit(shmBuffer *buffer,
                                int peer_rank,
-                               size_t shm_size) {
+                               size_t shm_size, bool broadcast) {
   char shmName[utils::MAX_SHM_NAME_LEN];
   buffer->shmSize = shm_size;
   buffer->shmOffset = 0;
-  sprintf(shmName, "qmpi-shm-send-%d-%d", peer_rank, rank_);
+  sprintf(shmName, "qmpi-shm-send-%d-%d", peer_rank, broadcast? peer_rank: rank_);
   TRIV_CHECK(utils::shmOpen(shmName,
                             buffer->shmSize,
                             (void **) &buffer->hostMem,
                             (void **) &buffer->devHostMem,
                             0));
-  TRIV_CHECK(utils::shmUnlink(shmName));
+  // in case of broadcast we cleanup later.
+  if (!broadcast)
+    TRIV_CHECK(utils::shmUnlink(shmName););
+}
+void SHMCommunicator::cleanupBroadcast() {
+  char shmName[utils::MAX_SHM_NAME_LEN];
+  sprintf(shmName, "qmpi-shm-send-%d-%d", rank_, rank_);
+  TRIV_CHECK(utils::shmUnlink(shmName););
 }
 
 void SHMCommunicator::initEventSend(gpuEventSync *eventSync,

@@ -17,12 +17,13 @@ size_t get_curand_array_size(int num_elems) {
 
 template<typename T>
 void quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
-                     unsigned char *feedback_data, int num_elems, int bits,
+                     unsigned char *feedback_data, unsigned char *util_buf,
+                     int num_elems, int bits,
                      int bucket_size, RandState *states,
                      gpuStream_t stream) {
 #if HAVE_CUDA
-  CUDA_quantize_maxmin<T>(input_data, output_data, feedback_data, num_elems, bits,
-                       bucket_size, states, stream);
+  CUDA_quantize_maxmin<T>(input_data, output_data, feedback_data, util_buf,
+                          num_elems, bits, bucket_size, states, stream);
 #elif HAVE_ROCM
   HIP_quantize_maxmin<T>(input_data, output_data, feedback_data, num_elems, bits,
                           bucket_size, states, stream);
@@ -31,11 +32,12 @@ void quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
 
 template<typename T, bool ADD>
 void dequantize_maxmin(unsigned char *input_data,
-                       unsigned char *output_data, int num_elems, int bits,
+                       unsigned char *output_data, unsigned char* util_buf,
+                       int num_elems, int bits,
                        int bucket_size, gpuStream_t stream) {
 #if HAVE_CUDA
-  CUDA_dequantize_maxmin<T, ADD>(input_data, output_data, num_elems, bits,
-                                 bucket_size, stream);
+  CUDA_dequantize_maxmin<T, ADD>(input_data, output_data, util_buf, num_elems,
+                                 bits, bucket_size, stream);
 #elif HAVE_ROCM
   HIP_dequantize_maxmin<T, ADD>(input_data, output_data, num_elems, bits,
                                  bucket_size, stream);
@@ -60,14 +62,14 @@ void init_rand_states(RandState *states, int num_elems, unsigned int seed,
 #endif
 }
 
-void half2float(Half* input, float* output, int numel, gpuStream_t stream) {
+void half2float(Half *input, float *output, int numel, gpuStream_t stream) {
 #if HAVE_CUDA
   CUDA_half2float(input, output, numel, stream);
 #elif HAVE_ROCM
 #endif
 }
 
-void float2half(float* input, Half* output, int numel, gpuStream_t stream) {
+void float2half(float *input, Half *output, int numel, gpuStream_t stream) {
 #if HAVE_CUDA
   CUDA_float2half(input, output, numel, stream);
 #elif HAVE_ROCM
@@ -78,6 +80,7 @@ void float2half(float* input, Half* output, int numel, gpuStream_t stream) {
 template void quantize_maxmin<float>(unsigned char *input_data,
                                      unsigned char *output_data,
                                      unsigned char *feedback_data,
+                                     unsigned char* util_buf,
                                      int num_elems,
                                      int bits,
                                      int bucket_size,
@@ -87,6 +90,7 @@ template void quantize_maxmin<float>(unsigned char *input_data,
 template void quantize_maxmin<Half>(unsigned char *input_data,
                                     unsigned char *output_data,
                                     unsigned char *feedback_data,
+                                    unsigned char* util_buf,
                                     int num_elems,
                                     int bits,
                                     int bucket_size,
@@ -96,6 +100,7 @@ template void quantize_maxmin<Half>(unsigned char *input_data,
 template
 void dequantize_maxmin<float, true>(unsigned char *input_data,
                                     unsigned char *output_data,
+                                    unsigned char* util_buf,
                                     int num_elems,
                                     int bits,
                                     int bucket_size,
@@ -103,30 +108,37 @@ void dequantize_maxmin<float, true>(unsigned char *input_data,
 
 template
 void dequantize_maxmin<float, false>(unsigned char *input_data,
-                                    unsigned char *output_data,
-                                    int num_elems,
-                                    int bits,
-                                    int bucket_size,
-                                    gpuStream_t stream);
+                                     unsigned char *output_data,
+                                     unsigned char* util_buf,
+                                     int num_elems,
+                                     int bits,
+                                     int bucket_size,
+                                     gpuStream_t stream);
 
 template
 void dequantize_maxmin<Half, true>(unsigned char *input_data,
-                                    unsigned char *output_data,
-                                    int num_elems,
-                                    int bits,
-                                    int bucket_size,
-                                    gpuStream_t stream);
+                                   unsigned char *output_data,
+                                   unsigned char* util_buf,
+                                   int num_elems,
+                                   int bits,
+                                   int bucket_size,
+                                   gpuStream_t stream);
 
 template
 void dequantize_maxmin<Half, false>(unsigned char *input_data,
                                     unsigned char *output_data,
+                                    unsigned char* util_buf,
                                     int num_elems,
                                     int bits,
                                     int bucket_size,
                                     gpuStream_t stream);
 
 template
-void add<float>(int n, const float *x, float *y, float *sum, gpuStream_t stream);
+void add<float>(int n,
+                const float *x,
+                float *y,
+                float *sum,
+                gpuStream_t stream);
 
 template
 void add<Half>(int n, const Half *x, Half *y, Half *sum, gpuStream_t stream);

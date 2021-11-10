@@ -24,13 +24,15 @@ constexpr int BLOCKS_PER_GRID(int num_elems, int threads_per_block) {
 
 template<typename T>
 void quantize_maxmin(unsigned char *input_data, unsigned char *output_data,
-                     unsigned char *feedback_data, int num_elems, int bits,
+                     unsigned char *feedback_data, unsigned char* util_buf,
+                     int num_elems, int bits,
                      int bucket_size, RandState *states,
                      gpuStream_t stream);
 
 template<typename T, bool ADD>
 void dequantize_maxmin(unsigned char *input_data,
-                       unsigned char *output_data, int num_elems, int bits,
+                       unsigned char *output_data, unsigned char* util_buf,
+                       int num_elems, int bits,
                        int bucket_size, gpuStream_t stream);
 
 void init_rand_states(RandState* states, int num_elems, unsigned int seed,
