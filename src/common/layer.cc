@@ -1,6 +1,6 @@
 #include "layer.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 Layer::Layer(const at::Tensor &tensor) {
@@ -23,4 +23,4 @@ Layer::Layer(const at::Tensor &tensor, const std::string &layer_name,
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

@@ -48,25 +48,25 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=42,
                     help='random seed')
-parser.add_argument('--dist-backend', choices=['qmpi', 'nccl', 'gloo'], default='nccl',
+parser.add_argument('--dist-backend', choices=['cgx', 'nccl', 'gloo'], default='nccl',
                     help='Backend for torch distributed')
 parser.add_argument('--quantization-bits', type=int, default=32,
-                    help='Quantization bits for qmpi')
+                    help='Quantization bits for cgx')
 parser.add_argument('--quantization-bucket-size', type=int, default=1024,
-                    help='Bucket size for quantization in qmpi')
+                    help='Bucket size for quantization in cgx')
 parser.add_argument('--local_rank', type=int, default=-1,
                     help='Local rank in distributed launch')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-if args.dist_backend == "qmpi":
+if args.dist_backend == "cgx":
     assert "OMPI_COMM_WORLD_SIZE" in os.environ, "Launch with mpirun"
-    import torch_qmpi
-    if 'COMPRESSION_QUANTIZATION_BITS' not in os.environ:
-        os.environ['COMPRESSION_QUANTIZATION_BITS'] = str(args.quantization_bits)
-    if 'COMPRESSION_BUCKET_SIZE' not in os.environ:
-        os.environ['COMPRESSION_BUCKET_SIZE'] = str(args.quantization_bucket_size)
+    import torch_cgx
+    if 'CGX_COMPRESSION_QUANTIZATION_BITS' not in os.environ:
+        os.environ['CGX_COMPRESSION_QUANTIZATION_BITS'] = str(args.quantization_bits)
+    if 'CGX_COMPRESSION_BUCKET_SIZE' not in os.environ:
+        os.environ['CGX_COMPRESSION_BUCKET_SIZE'] = str(args.quantization_bucket_size)
 
 
 if "OMPI_COMM_WORLD_SIZE" in os.environ:
@@ -146,11 +146,11 @@ else:
     num_classes = 10
 model = models.resnet18(num_classes=num_classes)
 
-if args.dist_backend == 'qmpi':
+if args.dist_backend == 'cgx':
     layers = [(name, p.numel()) for name, p in model.named_parameters()]
-    # torch_qmpi.register_model(layers)
-    # torch_qmpi.exclude_layer("bn")
-    # torch_qmpi.exclude_layer("bias")
+    # torch_cgx.register_model(layers)
+    # torch_cgx.exclude_layer("bn")
+    # torch_cgx.exclude_layer("bias")
 
 if args.cuda:
     # Move model to GPU.

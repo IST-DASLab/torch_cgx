@@ -1,5 +1,5 @@
 #include "reducer.h"
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 Reducer::Reducer(GPUContext *gpu_context,
@@ -9,11 +9,11 @@ Reducer::Reducer(GPUContext *gpu_context,
       gpu_context_(gpu_context),
       communicator_(communicator) {
   unsigned int fusion_size_mb =
-      utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
+      utils::GetIntEnvOrDefault(CGX_FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   tensor_fusion_size_ = std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 
 

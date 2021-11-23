@@ -11,7 +11,7 @@
 #include "common/p2p_communicator.h"
 #endif
 
-namespace qmpi {
+namespace cgx {
 
 std::vector<std::pair<std::string, int>>
     MPIAllReduce_Operation::model_parameters_;
@@ -25,8 +25,11 @@ int NumElements(std::vector<common::Layer> &layers) {
 }
 
 std::shared_ptr<common::Compressor> CreateCompressor(common::GPUContext *gpu_context) {
-  return std::make_shared<common::MaxMinQuantizer>(gpu_context);
-//  return std::make_shared<common::DummyCompressor>(gpu_context);
+  bool dummy = common::utils::GetIntEnvOrDefault(CGX_DUMMY_COMPRESSION, 0);
+  if (dummy)
+    return std::make_shared<common::DummyCompressor>(gpu_context);
+  else
+    return std::make_shared<common::MaxMinQuantizer>(gpu_context);
 }
 
 std::shared_ptr<common::Reducer>
@@ -47,7 +50,7 @@ std::shared_ptr<common::Reducer>
 CreateInnerReducer(common::GPUContext *gpu_context,
                    std::shared_ptr<common::Compressor> compressor,
                    int world_size) {
-  auto comm_type = common::utils::GetCommTypeFromEnv(INNER_COMMUNICATOR_TYPE,
+  auto comm_type = common::utils::GetCommTypeFromEnv(CGX_INNER_COMMUNICATOR_TYPE,
                                                      common::utils::CommunicatorType::SHM);
   std::shared_ptr<common::Communicator> communicator;
 #if HAVE_CUDA
@@ -60,7 +63,7 @@ CreateInnerReducer(common::GPUContext *gpu_context,
     communicator.reset(new common::MPICommunicator(gpu_context));
   if (!communicator)
     throw std::runtime_error("Communicator type is not supported");
-  auto red_type = common::utils::GetRedTypeFromEnv(INNER_REDUCTION_TYPE,
+  auto red_type = common::utils::GetRedTypeFromEnv(CGX_INNER_REDUCTION_TYPE,
                                                    common::utils::ReductionType::SRA);
   return CreateReducer(gpu_context,
                        compressor,
@@ -73,7 +76,7 @@ std::shared_ptr<common::Reducer>
 CreateCrossReducer(common::GPUContext *gpu_context,
                    std::shared_ptr<common::Compressor> compressor,
                    int world_size) {
-  auto red_type = common::utils::GetRedTypeFromEnv(CROSS_REDUCTION_TYPE,
+  auto red_type = common::utils::GetRedTypeFromEnv(CGX_CROSS_REDUCTION_TYPE,
                                                    common::utils::ReductionType::Ring);
   return CreateReducer(gpu_context,
                        compressor,
@@ -93,10 +96,10 @@ MPIAllReduce_Operation::MPIAllReduce_Operation() {
     cross_reducer_ = CreateCrossReducer(&gpu_context_, compressor_,
                                         mpi_context_.GetSize(mpi_context_.GetCrossComm()));
   unsigned int fusion_size_mb =
-      common::utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB,
+      common::utils::GetIntEnvOrDefault(CGX_FUSION_BUFFER_SIZE_MB,
                                         FUSION_SIZE_DEFAULT_MB);
   fake_compression_ratio_ =
-      common::utils::GetFloatEnvOrDefault(COMPRESSION_FAKE_RATIO, 1.0);
+      common::utils::GetFloatEnvOrDefault(CGX_COMPRESSION_FAKE_RATIO, 1.0);
   tensor_fusion_threshold_ =
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
   counter_ = 0;
@@ -221,4 +224,4 @@ void MPIAllReduce_Operation::ExcludeLayer(const std::string &layer) {
   common::Compressor::ExcludeLayer(layer);
 }
 
-} // namespace qmpi
+} // namespace cgx

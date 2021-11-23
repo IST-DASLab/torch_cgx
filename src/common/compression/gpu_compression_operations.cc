@@ -5,7 +5,7 @@
 #elif HAVE_ROCM
 #include "hip_compression_operations.h"
 #endif
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 
@@ -145,4 +145,4 @@ void add<Half>(int n, const Half *x, Half *y, Half *sum, gpuStream_t stream);
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

@@ -2,7 +2,7 @@
 #include "reducer.h"
 #include "communicator.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 class MPI_Allreduce_ScatterReduceAllgather : public MPIReducer {
@@ -34,4 +34,4 @@ private:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

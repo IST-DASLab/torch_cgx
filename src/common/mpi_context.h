@@ -1,7 +1,7 @@
 #pragma once
 #include <mpi.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct MPIContext {
@@ -18,6 +18,6 @@ private:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 
 

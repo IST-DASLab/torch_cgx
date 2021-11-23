@@ -2,7 +2,7 @@
 
 #include "compression/gpu_common.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 void printDebug(unsigned char *buf, int numel) {
@@ -46,7 +46,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
   int status;
   if (do_compression) {
     if (communicator_->GetType() == Communicator::MPI) {
-//    if (true) {
       status = AllreduceCompressed(num_elements,
                                    global_offset,
                                    layers,
@@ -279,8 +278,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressedRemoteBuf(int num_e
                                streams_[rank]);
   gpu_context_->StreamSynchronize(streams_[rank]);
   communicator_->Barrier();
-//  if (rank == 0)
-//    printDebug(remote_buf, 8);
   // Need to implement broadcasting with shm and p2p.
   for (int node_rank = 0; node_rank < world_size; node_rank++) {
     if (node_rank == rank)
@@ -290,8 +287,6 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressedRemoteBuf(int num_e
             node_rank));
     start_elem = offsets[node_rank];
     num_elems = chunk_sizes[node_rank];
-//    if (rank == 1)
-//      printDebug(remote_buf, 8);
     compressor_->Decompress(remote_buf,
                             layers,
                             start_elem,
@@ -480,4 +475,4 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceUncompressed(int num_elements
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <torch/torch.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace utils {
 
@@ -35,4 +35,4 @@ ReductionType GetRedTypeFromEnv(const char* env, ReductionType default_value);
 
 } // namespace utils
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

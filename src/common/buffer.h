@@ -1,7 +1,7 @@
 #pragma once
 #include <torch/torch.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct PersistentBuffer {
@@ -13,4 +13,4 @@ private:
 
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

@@ -11,7 +11,7 @@
 #include "../gpu_context.h"
 #include "gpu_def.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 
@@ -49,4 +49,4 @@ size_t get_curand_array_size(int num_elems);
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

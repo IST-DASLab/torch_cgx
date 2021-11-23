@@ -1,4 +1,4 @@
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 
@@ -39,4 +39,4 @@ __device__ float GetRand(RandState* state_p) {
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

@@ -1,7 +1,7 @@
 #pragma once
 #include "gpu_compression_operations.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 template<typename T>
@@ -22,4 +22,4 @@ void HIP_init_rand(RandState *states, int num_elems, unsigned int seed,
                    hipStream_t stream);
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

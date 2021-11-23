@@ -8,7 +8,7 @@
 #include "common/reducer.h"
 #include "common/layer.h"
 
-namespace qmpi {
+namespace cgx {
 const int MIN_LAYER_SIZE = 16;
 
 struct MPIAllReduce_Operation {
@@ -40,4 +40,4 @@ private:
   static std::vector<std::pair<std::string, int>> model_parameters_;
   int counter_;
 };
-} // namespace qmpi
+} // namespace cgx

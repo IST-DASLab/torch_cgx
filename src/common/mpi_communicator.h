@@ -1,7 +1,7 @@
 #pragma once
 #include "communicator.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct MPICommunicator : public Communicator {
@@ -29,4 +29,4 @@ protected:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

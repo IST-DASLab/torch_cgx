@@ -17,7 +17,7 @@
 #include "gpu_context.h"
 
 #include <thread>
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 class GPUContext::impl {
@@ -128,5 +128,5 @@ private:
 #include "gpu_context_impl.cc"
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 

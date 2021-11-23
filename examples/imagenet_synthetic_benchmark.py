@@ -26,21 +26,21 @@ parser.add_argument('--num-batches-per-iter', type=int, default=10,
 parser.add_argument('--num-iters', type=int, default=10,
                     help='number of benchmark iterations')
 
-parser.add_argument('--dist-backend', choices=['qmpi', 'nccl', 'gloo'], default='nccl',
+parser.add_argument('--dist-backend', choices=['cgx', 'nccl', 'gloo'], default='nccl',
                     help='Backend for torch distributed')
 parser.add_argument('--quantization-bits', type=int, default=32,
-                    help='Quantization bits for qmpi')
+                    help='Quantization bits for cgx')
 parser.add_argument('--quantization-bucket-size', type=int, default=1024,
-                    help='Bucket size for quantization in qmpi')
+                    help='Bucket size for quantization in cgx')
 parser.add_argument('--local_rank', type=int, default=-1,
                     help='Local rank in distributed launch')
 
 
 args = parser.parse_args()
 
-if args.dist_backend == "qmpi":
+if args.dist_backend == "cgx":
     assert "OMPI_COMM_WORLD_SIZE" in os.environ, "Launch with mpirun"
-    import torch_qmpi
+    import torch_cgx
     if 'COMPRESSION_QUANTIZATION_BITS' not in os.environ:
         os.environ['COMPRESSION_QUANTIZATION_BITS'] = str(args.quantization_bits)
     if 'COMPRESSION_BUCKET_SIZE' not in os.environ:
@@ -97,11 +97,11 @@ log('Batch size: %d' % args.batch_size)
 device = 'GPU'
 log('Number of %ss: %d' % (device, args.world_size))
 
-if args.dist_backend == 'qmpi':
+if args.dist_backend == 'cgx':
     layers = [(name, p.numel()) for name, p in model.named_parameters()]
-    torch_qmpi.register_model(layers)
-    torch_qmpi.exclude_layer("bn")
-    torch_qmpi.exclude_layer("bias")
+    torch_cgx.register_model(layers)
+    torch_cgx.exclude_layer("bn")
+    torch_cgx.exclude_layer("bias")
 
 
 # Warm-up

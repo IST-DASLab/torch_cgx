@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 void P2PCommunicator::Init(int world_size, void *ctx) {
   if (initialized_)
@@ -13,7 +13,7 @@ void P2PCommunicator::Init(int world_size, void *ctx) {
   world_size_ = world_size;
   cudaGetDevice(&rank_);
   unsigned int fusion_size_mb =
-      utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
+      utils::GetIntEnvOrDefault(CGX_FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   unsigned int buf_size =
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
   buffer_ = std::make_unique<PersistentBuffer>(buf_size * world_size);
@@ -194,4 +194,4 @@ void* P2PCommunicator::GetRemoteBroadcastBuftoRecv(int peer_rank) {
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

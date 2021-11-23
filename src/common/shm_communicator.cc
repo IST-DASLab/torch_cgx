@@ -14,7 +14,7 @@
     }                                                                          \
   } while (0)
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 SHMCommunicator::~SHMCommunicator() {
@@ -45,7 +45,7 @@ void SHMCommunicator::Init(int world_size, void *ctx) {
   MPI_CHECK(MPI_Comm_rank(comm_, &rank_));
   world_size_ = world_size;
   unsigned int fusion_size_mb =
-      utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
+      utils::GetIntEnvOrDefault(CGX_FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   unsigned int buf_size =
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
   // Initialize shared memory buffers.
@@ -217,7 +217,7 @@ void SHMCommunicator::sendInit(shmBuffer *buffer,
   char shmName[utils::MAX_SHM_NAME_LEN];
   buffer->shmSize = shm_size;
   buffer->shmOffset = 0;
-  sprintf(shmName, "qmpi-shm-send-%d-%d", rank_, peer_rank);
+  sprintf(shmName, "cgx-shm-send-%d-%d", rank_, peer_rank);
   TRIV_CHECK(utils::shmOpen(shmName,
                             buffer->shmSize,
                             (void **) &buffer->hostMem,
@@ -231,7 +231,7 @@ void SHMCommunicator::recvInit(shmBuffer *buffer,
   char shmName[utils::MAX_SHM_NAME_LEN];
   buffer->shmSize = shm_size;
   buffer->shmOffset = 0;
-  sprintf(shmName, "qmpi-shm-send-%d-%d", peer_rank, broadcast? peer_rank: rank_);
+  sprintf(shmName, "cgx-shm-send-%d-%d", peer_rank, broadcast? peer_rank: rank_);
   TRIV_CHECK(utils::shmOpen(shmName,
                             buffer->shmSize,
                             (void **) &buffer->hostMem,
@@ -243,7 +243,7 @@ void SHMCommunicator::recvInit(shmBuffer *buffer,
 }
 void SHMCommunicator::cleanupBroadcast() {
   char shmName[utils::MAX_SHM_NAME_LEN];
-  sprintf(shmName, "qmpi-shm-send-%d-%d", rank_, rank_);
+  sprintf(shmName, "cgx-shm-send-%d-%d", rank_, rank_);
   TRIV_CHECK(utils::shmUnlink(shmName););
 }
 
