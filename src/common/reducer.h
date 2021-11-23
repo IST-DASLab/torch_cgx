@@ -11,7 +11,7 @@
 #include "shm_communicator.h"
 #endif
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 class Reducer {
@@ -47,4 +47,4 @@ public:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

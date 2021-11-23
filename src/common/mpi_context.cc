@@ -1,6 +1,6 @@
 #include "mpi_context.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 MPIContext::MPIContext() {
@@ -28,4 +28,4 @@ int MPIContext::GetRank(MPI_Comm comm) {
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

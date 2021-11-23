@@ -4,7 +4,7 @@
 #include <vector>
 #include "buffer.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct P2PCommunicator : public Communicator {
@@ -57,5 +57,5 @@ private:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 

@@ -2,7 +2,7 @@
 
 #include <torch/torch.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct Layer {
@@ -25,4 +25,4 @@ private:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

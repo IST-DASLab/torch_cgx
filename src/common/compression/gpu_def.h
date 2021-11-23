@@ -1,5 +1,5 @@
 #pragma once
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 using uint64_t = unsigned long long int;
@@ -9,7 +9,7 @@ struct xorshift128p_state {
 };
 
 using Half = __half;
-using RandState = qmpi::common::gpu::xorshift128p_state;
+using RandState = cgx::common::gpu::xorshift128p_state;
 
 const float EPS = 1e-10;
 const int PACK_SIZE = 8;
@@ -70,4 +70,4 @@ struct TypeToVectorType<Half> {
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

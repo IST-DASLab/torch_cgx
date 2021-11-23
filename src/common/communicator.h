@@ -3,7 +3,7 @@
 #include "common.h"
 #include <mpi.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct Communicator {
@@ -38,4 +38,4 @@ protected:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

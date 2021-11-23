@@ -2,7 +2,7 @@
 #include "common.h"
 #include "utils.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 std::set<std::string> Compressor::ignore_modules;
@@ -11,19 +11,19 @@ std::unordered_map<std::string, CompressionLayerConfig>
 
 Compressor::Compressor(GPUContext *gpu_context) : gpu_context_(gpu_context) {
   unsigned int fusion_size_mb =
-      utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
+      utils::GetIntEnvOrDefault(CGX_FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   tensor_fusion_size_ =
       std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
 }
 
 void Compressor::ResetParamsFromEnv() {
   default_config.bucket_size = utils::GetIntEnvOrDefault(
-      COMPRESSION_BUCKET_SIZE, COMPRESSION_DEFAULT_BUCKET_SIZE);
+      CGX_COMPRESSION_BUCKET_SIZE, COMPRESSION_DEFAULT_BUCKET_SIZE);
   default_config.skip_incomplete_buckets = false;
-  utils::SetBoolFromEnv(COMPRESSION_SKIP_INCOMPLETE_BUCKETS,
+  utils::SetBoolFromEnv(CGX_COMPRESSION_SKIP_INCOMPLETE_BUCKETS,
                         default_config.skip_incomplete_buckets, true);
   min_elems_to_compress_ =
-      std::max(utils::GetIntEnvOrDefault(COMPRESSION_MINIMAL_SIZE, 0),
+      std::max(utils::GetIntEnvOrDefault(CGX_COMPRESSION_MINIMAL_SIZE, 0),
                MIN_SIZE_TO_COMPRESS);
 }
 
@@ -269,7 +269,7 @@ Quantizer::Quantizer(GPUContext *gpu_context)
 void Quantizer::ResetParamsFromEnv() {
   Compressor::ResetParamsFromEnv();
   auto quantization_bits =
-      common::utils::GetIntEnvOrDefault(COMPRESSION_QUANTIZATION_BITS, 32);
+      common::utils::GetIntEnvOrDefault(CGX_COMPRESSION_QUANTIZATION_BITS, 32);
   default_config.quantization_bits = quantization_bits;
 }
 
@@ -480,4 +480,4 @@ void MaxMinQuantizer::Init(int element_size, gpuStream_t stream) {
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

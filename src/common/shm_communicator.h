@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 struct SHMCommunicator : public Communicator {
@@ -73,5 +73,5 @@ private:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 

@@ -1,6 +1,6 @@
 #include "ring.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 MPI_Allreduce_Ring::MPI_Allreduce_Ring(GPUContext *gpu_context,
@@ -229,4 +229,4 @@ int MPI_Allreduce_Ring::AllreduceDivisionCompressed(int num_elements,
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

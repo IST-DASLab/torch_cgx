@@ -35,7 +35,7 @@ using gpuIpcEventHandle_t = hipIpcEventHandle_t;
 #include <functional>
 #include <torch/torch.h>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 class GPUContext {
@@ -73,4 +73,4 @@ private:
   std::unique_ptr<impl> pimpl;
 };
 } // namespace common
-}// namespace qmpi
+}// namespace cgx

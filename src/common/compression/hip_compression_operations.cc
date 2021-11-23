@@ -15,7 +15,7 @@
     }                                                                          \
   } while (0)
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 const bool VECTORIZE_COMPRESS = false;
@@ -647,4 +647,4 @@ template void HIP_dequantize_maxmin<Half, false>(unsigned char *input_data,
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

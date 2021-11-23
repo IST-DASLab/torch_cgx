@@ -8,7 +8,7 @@
 #include "buffer.h"
 #include "layer.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 const int COMPRESSION_DEFAULT_BUCKET_SIZE = 512;
 const int MIN_SIZE_TO_COMPRESS = 16;
@@ -167,4 +167,4 @@ public:
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

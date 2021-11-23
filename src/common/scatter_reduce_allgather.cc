@@ -3,7 +3,7 @@
 #include "compression/gpu_common.h"
 #include "assert.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 void printDebug(unsigned char *buf, int numel) {
@@ -14,7 +14,7 @@ void printDebug(unsigned char *buf, int numel) {
   }
   std::cout << std::endl;
   CUDA_CHECK(cudaGetLastError());
-  delete[]host_buf;
+  delete []host_buf;
 }
 
 MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(

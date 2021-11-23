@@ -1,6 +1,6 @@
 #include "buffer.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 PersistentBuffer::PersistentBuffer(size_t size) {
 //  tensor_ = at::empty(size, at::device(at::kCUDA).dtype(at::kByte));
@@ -13,5 +13,5 @@ void * PersistentBuffer::RawPointer() const {
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 

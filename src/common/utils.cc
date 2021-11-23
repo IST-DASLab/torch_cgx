@@ -1,7 +1,7 @@
 #include "utils.h"
 #include <string>
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace utils {
 
@@ -73,4 +73,4 @@ size_t aligned_size(size_t size) {
 
 } // namespace utils
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

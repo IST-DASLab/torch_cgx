@@ -2,7 +2,7 @@
 
 #include "reducer.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 class MPI_Allreduce_Ring : public MPIReducer {
@@ -26,4 +26,4 @@ gpuStream_t stream_;
 };
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

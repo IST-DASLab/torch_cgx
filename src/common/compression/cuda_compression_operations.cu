@@ -3,7 +3,7 @@
 #include "gpu_fp16_util.h"
 #include "gpu_common.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 #if CUDA_VECTORIZED
@@ -844,4 +844,4 @@ template void CUDA_dequantize_maxmin<Half, false>(unsigned char *input_data,
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

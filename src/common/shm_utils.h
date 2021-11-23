@@ -1,6 +1,6 @@
 #pragma once
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace utils {
 const int MAX_SHM_NAME_LEN = 1024;
@@ -14,4 +14,4 @@ int shmClose(void *shmPtr, void *devShmPtr, const int shmsize);
 
 } // namespace utils
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

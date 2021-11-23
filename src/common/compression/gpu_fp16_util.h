@@ -6,7 +6,7 @@
 #include <hip/hip_fp16.h>
 #endif
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 
@@ -209,4 +209,4 @@ __global__ void float2half(float* input, __half* output, int numel) {
 
 } // namespace cuda
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

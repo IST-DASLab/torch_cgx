@@ -1,6 +1,6 @@
 #include "mpi_communicator.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 
 void MPICommunicator::Init(int world_size, void *ctx) {
@@ -89,4 +89,4 @@ void *MPICommunicator::GetRemoteBroadcastBuftoRecv(int peer_rank) {
 }
 
 } // namespace common
-} // namespace qmpi
+} // namespace cgx

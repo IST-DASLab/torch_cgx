@@ -3,7 +3,7 @@ import torch
 import os
 import unittest
 import warnings
-import torch_qmpi
+import torch_cgx
 import numpy as np
 
 def reduce_equal_tests(rank, world_size, device="cuda"):
@@ -38,10 +38,10 @@ def reduce_nonequal_tests(rank, world_size, device="cuda"):
     return tests
 
 
-class QmpiTests(unittest.TestCase):
+class CGXTests(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
-        super(QmpiTests, self).__init__(*args, **kwargs)
+        super(CGXTests, self).__init__(*args, **kwargs)
         warnings.simplefilter('module')
 
     def assertTensorEqual(self, t1, t2, msg=None):
@@ -59,7 +59,7 @@ class QmpiTests(unittest.TestCase):
         os.environ['MASTER_ADDR'] = '127.0.0.1'
         os.environ['MASTER_PORT'] = '4040'
         os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
-        dist.init_process_group(backend="qmpi",  init_method="env://", rank=self.rank)
+        dist.init_process_group(backend="cgx",  init_method="env://", rank=self.rank)
         torch.cuda.set_device(self.rank)
 
     def tearDown(self) -> None:

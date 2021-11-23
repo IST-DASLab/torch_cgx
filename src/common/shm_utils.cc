@@ -45,7 +45,7 @@
   } while (false)
 
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace utils {
 
@@ -135,5 +135,5 @@ int shmClose(void *shmPtr, void *devShmPtr, const int shmsize) {
 
 } // namespace utils
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
 

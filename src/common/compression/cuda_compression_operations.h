@@ -1,7 +1,7 @@
 #pragma once
 #include "gpu_compression_operations.h"
 
-namespace qmpi {
+namespace cgx {
 namespace common {
 namespace gpu {
 template<typename T>
@@ -34,4 +34,4 @@ void CUDA_float2half(float *input,
 
 } // namespace gpu
 } // namespace common
-} // namespace qmpi
+} // namespace cgx
