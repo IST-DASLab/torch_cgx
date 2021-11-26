@@ -31,6 +31,9 @@ private:
                         std::vector<Layer> &layers,
                         void *comm);
   gpuStream_t* streams_;
+private:
+  bool remote_buf_compression_enabled_;
+  bool all_to_all_reduction_;
 };
 
 } // namespace common

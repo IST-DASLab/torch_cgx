@@ -1,6 +1,7 @@
 #include "scatter_reduce_allgather.h"
 
 #include "compression/gpu_common.h"
+#include "assert.h"
 
 namespace qmpi {
 namespace common {
@@ -13,7 +14,7 @@ void printDebug(unsigned char *buf, int numel) {
   }
   std::cout << std::endl;
   CUDA_CHECK(cudaGetLastError());
-  delete []host_buf;
+  delete[]host_buf;
 }
 
 MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
@@ -35,6 +36,11 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
   for (int i = 0; i < world_size; i++) {
     gpu_context->StreamCreate(&streams_[i]);
   }
+  remote_buf_compression_enabled_ =
+      utils::GetIntEnvOrDefault(REMOTE_BUF_COMPRESSION, 0);
+  all_to_all_reduction_ =
+      utils::GetIntEnvOrDefault(DEBUG_ALL_TO_ALL_REDUCTION, 0);
+  assert(!(remote_buf_compression_enabled_ and all_to_all_reduction_));
 }
 
 int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
@@ -45,21 +51,22 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceDivision(int num_elements,
   MPI_Comm comm = *(static_cast<MPI_Comm *>(comm_p));
   int status;
   if (do_compression) {
-    if (communicator_->GetType() == Communicator::MPI) {
-//    if (true) {
-      status = AllreduceCompressed(num_elements,
-                                   global_offset,
-                                   layers,
-                                   comm_p);
-//    status = AllReduceAlltoAll(num_elements,
-//                               global_offset,
-//                               layers,
-//                               comm_p);
-    } else {
+    if (all_to_all_reduction_) {
+      status = AllReduceAlltoAll(num_elements,
+                                 global_offset,
+                                 layers,
+                                 comm_p);
+    } else if (remote_buf_compression_enabled_
+        and communicator_->GetType() != Communicator::MPI) {
       status = AllreduceCompressedRemoteBuf(num_elements,
                                             global_offset,
                                             layers,
                                             comm_p);
+    } else {
+      status = AllreduceCompressed(num_elements,
+                                   global_offset,
+                                   layers,
+                                   comm_p);
     }
   } else {
     status = AllreduceUncompressed(num_elements,
@@ -240,8 +247,11 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressedRemoteBuf(int num_e
     num_elems = chunk_sizes[node_rank];
     remote_buf =
         static_cast<unsigned char *>(communicator_->GetRemoteBuftoSend(node_rank));
-    send_compressed_size = utils::aligned_size(compressor_->Compress(remote_buf, layers, start_elem,
-                          num_elems, streams_[node_rank]));
+    send_compressed_size = utils::aligned_size(compressor_->Compress(remote_buf,
+                                                                     layers,
+                                                                     start_elem,
+                                                                     num_elems,
+                                                                     streams_[node_rank]));
   }
   for (int i = 0; i < world_size; i++) {
     gpu_context_->StreamSynchronize(streams_[i]);
