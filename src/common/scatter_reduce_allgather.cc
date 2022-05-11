@@ -37,9 +37,9 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
     gpu_context->StreamCreate(&streams_[i]);
   }
   remote_buf_compression_enabled_ =
-      utils::GetIntEnvOrDefault(REMOTE_BUF_COMPRESSION, 0);
+      utils::GetIntEnvOrDefault(CGX_REMOTE_BUF_COMPRESSION, 0);
   all_to_all_reduction_ =
-      utils::GetIntEnvOrDefault(DEBUG_ALL_TO_ALL_REDUCTION, 0);
+      utils::GetIntEnvOrDefault(CGX_DEBUG_ALL_TO_ALL_REDUCTION, 0);
   assert(!(remote_buf_compression_enabled_ and all_to_all_reduction_));
 }
 

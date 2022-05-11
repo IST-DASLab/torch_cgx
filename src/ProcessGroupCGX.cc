@@ -1,4 +1,4 @@
-#include "qmpi.h"
+#include "ProcessGroupCGX.h"
 
 #include <limits>
 #include <map>
@@ -7,7 +7,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <mpi-ext.h> // Needed for CUDA-aware check
 
-namespace qmpi {
+namespace cgx {
 
 #define MPI_CHECK(cmd)                                                   \
   do {                                                                   \
@@ -92,25 +92,25 @@ void checkSameSizeAndType(
 
 } // namespace
 
-std::vector<at::Tensor> ProcessGroupQMPI::WorkMPI::result() {
+std::vector<at::Tensor> ProcessGroupCGX::WorkMPI::result() {
   return outputTensors_;
 }
 
-c10::intrusive_ptr<c10::ivalue::Future> ProcessGroupQMPI::WorkMPI::getFuture() {
+c10::intrusive_ptr<c10::ivalue::Future> ProcessGroupCGX::WorkMPI::getFuture() {
   return future_;
 }
 
-void ProcessGroupQMPI::WorkMPI::finishWorkMPIError(std::exception_ptr eptr) {
+void ProcessGroupCGX::WorkMPI::finishWorkMPIError(std::exception_ptr eptr) {
   future_->setError(eptr);
   finish(eptr);
 }
 
-void ProcessGroupQMPI::WorkMPI::finishWorkMPI() {
+void ProcessGroupCGX::WorkMPI::finishWorkMPI() {
   future_->markCompleted(at::IValue(outputTensors_));
   finish();
 }
 
-ProcessGroupQMPI::AsyncWork::AsyncWork(MPI_Request request,
+ProcessGroupCGX::AsyncWork::AsyncWork(MPI_Request request,
                                        std::vector<at::Tensor> outputTensors,
                                        const char *profilingTitle,
                                        const c10::optional<std::vector<at::Tensor>> &inputTensors)
@@ -123,7 +123,7 @@ ProcessGroupQMPI::AsyncWork::AsyncWork(MPI_Request request,
   memset(&status_, 0, sizeof(status_));
 }
 
-ProcessGroupQMPI::AsyncWork::~AsyncWork() {
+ProcessGroupCGX::AsyncWork::~AsyncWork() {
   if (request_ != MPI_REQUEST_NULL) {
     std::cerr
         << "Attempted destruction of AsyncWork before work has completed, "
@@ -132,7 +132,7 @@ ProcessGroupQMPI::AsyncWork::~AsyncWork() {
   }
 }
 
-bool ProcessGroupQMPI::AsyncWork::isCompleted() {
+bool ProcessGroupCGX::AsyncWork::isCompleted() {
   if (request_ == MPI_REQUEST_NULL) {
     return true;
   }
@@ -153,7 +153,7 @@ bool ProcessGroupQMPI::AsyncWork::isCompleted() {
   return true;
 }
 
-bool ProcessGroupQMPI::AsyncWork::isSuccess() const {
+bool ProcessGroupCGX::AsyncWork::isSuccess() const {
   if (request_ != MPI_REQUEST_NULL) {
     throw std::runtime_error(
         "Invalid call to AsyncWork::isSuccess before work has completed");
@@ -162,11 +162,11 @@ bool ProcessGroupQMPI::AsyncWork::isSuccess() const {
   return status_.MPI_ERROR == MPI_SUCCESS;
 }
 
-int ProcessGroupQMPI::AsyncWork::sourceRank() const {
+int ProcessGroupCGX::AsyncWork::sourceRank() const {
   return status_.MPI_SOURCE;
 }
 
-bool ProcessGroupQMPI::AsyncWork::wait(std::chrono::milliseconds /* unused */) {
+bool ProcessGroupCGX::AsyncWork::wait(std::chrono::milliseconds /* unused */) {
   if (request_ == MPI_REQUEST_NULL) {
     return true;
   }
@@ -182,15 +182,15 @@ bool ProcessGroupQMPI::AsyncWork::wait(std::chrono::milliseconds /* unused */) {
   return true;
 }
 
-void ProcessGroupQMPI::AsyncWork::abort() {
-  TORCH_CHECK(false, "ProcessGroupQMPI::AsyncWork::abort not implemented.")
+void ProcessGroupCGX::AsyncWork::abort() {
+  TORCH_CHECK(false, "ProcessGroupCGX::AsyncWork::abort not implemented.")
 }
 
-std::vector<at::Tensor> ProcessGroupQMPI::AsyncWork::result() {
+std::vector<at::Tensor> ProcessGroupCGX::AsyncWork::result() {
   return outputTensors_;
 }
 
-void ProcessGroupQMPI::AsyncWork::populateException() {
+void ProcessGroupCGX::AsyncWork::populateException() {
   std::array<char, MPI_MAX_ERROR_STRING> buf;
   int len = buf.size();
   MPI_CHECK(MPI_Error_string(status_.MPI_ERROR, buf.data(), &len));
@@ -199,12 +199,12 @@ void ProcessGroupQMPI::AsyncWork::populateException() {
 }
 
 // Static global states
-int ProcessGroupQMPI::mpiThreadSupport_ = 0;
-std::mutex ProcessGroupQMPI::pgGlobalMutex_;
+int ProcessGroupCGX::mpiThreadSupport_ = 0;
+std::mutex ProcessGroupCGX::pgGlobalMutex_;
 // We only want to initialize once
-std::once_flag ProcessGroupQMPI::onceFlagInitMPI;
+std::once_flag ProcessGroupCGX::onceFlagInitMPI;
 
-void ProcessGroupQMPI::mpiExit() {
+void ProcessGroupCGX::mpiExit() {
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
   if (mpiDatatype.find(at::kHalf) != mpiDatatype.end()) {
     MPI_Type_free(&mpiDatatype[at::kHalf]);
@@ -212,7 +212,7 @@ void ProcessGroupQMPI::mpiExit() {
   MPI_CHECK(MPI_Finalize());
 }
 
-void ProcessGroupQMPI::initMPIOnce() {
+void ProcessGroupCGX::initMPIOnce() {
   // Initialize MPI environment
   std::call_once(onceFlagInitMPI, []() {
     MPI_CHECK(MPI_Init_thread(
@@ -224,13 +224,13 @@ void ProcessGroupQMPI::initMPIOnce() {
           "MPI_THREAD_SERIALIZED. This is required by "
           "c10d package");
     }
-    if (std::atexit(ProcessGroupQMPI::mpiExit)) {
+    if (std::atexit(ProcessGroupCGX::mpiExit)) {
       throw std::runtime_error("Fail to register the MPI exit handler");
     }
   });
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup> ProcessGroupQMPI::createProcessGroupQMPI(
+c10::intrusive_ptr<c10d::ProcessGroup> ProcessGroupCGX::createProcessGroupCGX(
     const c10::intrusive_ptr<c10d::Store> &store,
     int rank,
     int size,
@@ -239,24 +239,24 @@ c10::intrusive_ptr<c10d::ProcessGroup> ProcessGroupQMPI::createProcessGroupQMPI(
   initMPIOnce();
 
   MPI_Comm groupComm = MPI_COMM_WORLD;
-  return c10::make_intrusive<ProcessGroupQMPI>(rank, size, groupComm);
+  return c10::make_intrusive<ProcessGroupCGX>(rank, size, groupComm);
 }
 
-ProcessGroupQMPI::ProcessGroupQMPI(int rank, int size, MPI_Comm pgComm)
+ProcessGroupCGX::ProcessGroupCGX(int rank, int size, MPI_Comm pgComm)
     : ProcessGroup(rank, size), stop_(false), pgComm_(pgComm) {
   if (pgComm_ == MPI_COMM_NULL) {
     throw std::runtime_error("pgComm_ must not be MPI_COMM_NULL");
   }
   allreduce_operator = std::make_unique<MPIAllReduce_Operation>();
   // Start the worker thread accepting MPI calls
-  workerThread_ = std::thread(&ProcessGroupQMPI::runLoop, this);
+  workerThread_ = std::thread(&ProcessGroupCGX::runLoop, this);
 }
 
-ProcessGroupQMPI::~ProcessGroupQMPI() {
+ProcessGroupCGX::~ProcessGroupCGX() {
   destroy();
 }
 
-void ProcessGroupQMPI::destroy() {
+void ProcessGroupCGX::destroy() {
   std::unique_lock<std::mutex> lock(pgMutex_);
   queueConsumeCV_.wait(lock, [&] { return queue_.empty(); });
   // Queue is empty, signal stop
@@ -270,12 +270,12 @@ void ProcessGroupQMPI::destroy() {
   workerThread_.join();
 }
 
-void ProcessGroupQMPI::abort() {
+void ProcessGroupCGX::abort() {
   destroy();
   MPI_Abort(pgComm_, EXIT_FAILURE);
 }
 
-void ProcessGroupQMPI::runLoop() {
+void ProcessGroupCGX::runLoop() {
   std::unique_lock<std::mutex> lock(pgMutex_);
   while (!stop_) {
     if (queue_.empty()) {
@@ -298,7 +298,7 @@ void ProcessGroupQMPI::runLoop() {
   }
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::enqueue(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::enqueue(
     std::unique_ptr<WorkEntry> entry,
     const char *profilingTitle,
     const c10::optional<std::vector<at::Tensor>> &inputTensors) {
@@ -311,7 +311,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::enqueue(
   return work;
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::broadcast(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::broadcast(
     std::vector<at::Tensor> &tensors,
     const c10d::BroadcastOptions &opts) {
   checkSingleTensor(tensors);
@@ -343,7 +343,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::broadcast(
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::allreduce(
     std::vector<at::Tensor> &tensors,
     const c10d::AllreduceOptions &opts) {
   checkSingleTensor(tensors);
@@ -385,14 +385,14 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce(
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allreduce_coalesced(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::allreduce_coalesced(
     std::vector<at::Tensor> &tensors,
     const c10d::AllreduceCoalescedOptions &opts) {
   throw std::runtime_error(
       "allreduce_coalesced is currently not supported with MPI");
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::reduce(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::reduce(
     std::vector<at::Tensor> &tensors,
     const c10d::ReduceOptions &opts) {
   checkSingleTensor(tensors);
@@ -422,7 +422,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::reduce(
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allgather(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::allgather(
     std::vector<std::vector<at::Tensor>> &outputTensors,
     std::vector<at::Tensor> &inputTensors,
     const c10d::AllgatherOptions &opts) {
@@ -468,15 +468,15 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allgather(
                  c10::optional<std::vector<at::Tensor>>(inputTensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::allgather_coalesced(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::allgather_coalesced(
     std::vector<std::vector<at::Tensor>> & /* unused */,
     std::vector<at::Tensor> & /* unused */,
     const c10d::AllgatherOptions & /* unused */) {
   throw std::runtime_error(
-      "ProcessGroupQMPI does not support allgather_coalesced");
+      "ProcessGroupCGX does not support allgather_coalesced");
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::gather(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::gather(
     std::vector<std::vector<at::Tensor>> &outputTensors,
     std::vector<at::Tensor> &inputTensors,
     const c10d::GatherOptions &opts) {
@@ -547,7 +547,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::gather(
   }
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::scatter(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::scatter(
     std::vector<at::Tensor> &outputTensors,
     std::vector<std::vector<at::Tensor>> &inputTensors,
     const c10d::ScatterOptions &opts) {
@@ -623,14 +623,14 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::scatter(
   }
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::reduce_scatter(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::reduce_scatter(
     std::vector<at::Tensor> &outputTensors,
     std::vector<std::vector<at::Tensor>> &inputTensors,
     const c10d::ReduceScatterOptions &opts) {
-  throw std::runtime_error("ProcessGroupQMPI does not support reduce_scatter");
+  throw std::runtime_error("ProcessGroupCGX does not support reduce_scatter");
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::alltoall_base(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::alltoall_base(
     at::Tensor &outputTensor,
     at::Tensor &inputTensor,
     std::vector<int64_t> &outputSplitSizes,
@@ -712,7 +712,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::alltoall_base(
         c10::optional<std::vector<at::Tensor>>(inputTensors));
   }
 }
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::alltoall(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::alltoall(
     std::vector<at::Tensor> &outputTensors,
     std::vector<at::Tensor> &inputTensors,
     const c10d::AllToAllOptions &opts) {
@@ -776,7 +776,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::alltoall(
       c10::optional<std::vector<at::Tensor>>(inputTensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::send(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::send(
     std::vector<at::Tensor> &tensors,
     int dstRank,
     int tag) {
@@ -805,7 +805,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::send(
       c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::recv(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::recv(
     std::vector<at::Tensor> &tensors,
     int srcRank,
     int tag) {
@@ -834,7 +834,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::recv(
       c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::recvAnysource(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::recvAnysource(
     std::vector<at::Tensor> &tensors,
     int tag) {
   checkSingleTensor(tensors);
@@ -862,7 +862,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::recvAnysource(
       c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::barrier(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::barrier(
     const c10d::BarrierOptions &opts) {
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [this](std::unique_ptr<WorkEntry> &entry) {
@@ -874,7 +874,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::barrier(
   return enqueue(std::move(entry), "mpi:barrier", c10::nullopt);
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::_allgather_base(
+c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::_allgather_base(
     at::Tensor & /*unused */,
     at::Tensor & /*unused */,
     const c10d::AllgatherOptions & /*unused */) {
@@ -882,7 +882,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupQMPI::_allgather_base(
       "no support for allgather_base in MPI process group");
 }
 
-MPI_Datatype ProcessGroupQMPI::float16_type;
+MPI_Datatype ProcessGroupCGX::float16_type;
 
 void RegisterModel(std::vector<std::pair<std::string, int>> &model_parameters) {
   MPIAllReduce_Operation::RegisterModel(model_parameters);
@@ -894,9 +894,9 @@ void ExcludeLayer(const std::string &layer_name) {
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m
 ) {
-m.def("createProcessGroupQMPI", &ProcessGroupQMPI::createProcessGroupQMPI);
+m.def("createProcessGroupCGX", &ProcessGroupCGX::createProcessGroupCGX);
 m.def("register_model", &RegisterModel);
 m.def("exclude_layer", &ExcludeLayer);
 }
 
-} // namespace qmpi
+} // namespace cgx
