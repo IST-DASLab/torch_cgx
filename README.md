@@ -17,6 +17,12 @@ If CUDA or ROCm are installed not in the standard paths, set `[CUDA|ROCM]_HOME` 
 
 As long as it is based on MPI, it requires OpenMPI with GPU support installed (other MPI implementations were not tested).
 Also, the library supports NCCL based communications, so it requires NVIDIA NCCL library.
+### Install
+```bash
+export MPI_HOME=/path/to/mpi
+export NCCL_HOME=/path/to/nccl
+pip install pytorch-cgx
+```
 
 ### Build from source
 Set `MPI_HOME` environment variable to mpi home. In case of AMD GPU, set `CGX_CUDA` to 0.
@@ -25,6 +31,7 @@ Set `QSGD_DETERMENISTIC=0` if you want to have stochastic version QSGD.
 
 ```bash
 git clone https://github.com/IST-DASLab/torch_cgx
+cd torch_cgx
 export MPI_HOME=/path/to/mpi
 export NCCL_HOME=/path/to/nccl
 python setup.py install
@@ -48,7 +55,7 @@ For that users need to register the communication hook. The minimal size of the 
 controlled with `layer_min_size` parameter.
 
 ``` python
-model = torch.
+model = torch.nn.parallel.DistributedDataParallel(...)
 from cgx_utils import cgx_hook, CGXState
 state = CGXState(torch.distributed.group.WORLD, layer_min_size=1024,
                   compression_params={"bits": args.quantization_bits,

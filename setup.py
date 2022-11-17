@@ -2,6 +2,7 @@ from setuptools import setup, Extension
 from torch.utils import cpp_extension
 import os
 import subprocess
+from pathlib import Path
 
 src = ['src/mpi_allreduce_operations.cc', 'src/ProcessGroupCGX.cc',
        'src/common/reducer.cc', 'src/common/buffer.cc', 'src/common/mpi_context.cc',
@@ -60,11 +61,16 @@ if QSGD_DETERMENISTIC:
     nvcc_compile_args.append("-DQSGD_DETERMENISTIC=1")
     cxx_compile_args.append("-DQSGD_DETERMENISTIC=1")
 
-setup(name='torch_cgx',
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
+
+setup(name='pytorch_cgx',
       packages=['cgx_utils'],
       version='0.1.0',
       description='pytorch extension adding a backend '
                   'supporting allreduce of quantized buffers.',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       author='Ilia Markov',
       author_email='ilia.markov@ist.ac.at',
       url='https://github.com/IST-DASLab/torch_cgx/',
