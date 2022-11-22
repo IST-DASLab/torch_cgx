@@ -66,7 +66,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(name='pytorch_cgx',
       packages=['cgx_utils'],
-      version='0.1.0',
+      version='0.1.1',
       description='pytorch extension adding a backend '
                   'supporting allreduce of quantized buffers.',
       long_description=long_description,
@@ -74,7 +74,7 @@ setup(name='pytorch_cgx',
       author='Ilia Markov',
       author_email='ilia.markov@ist.ac.at',
       url='https://github.com/IST-DASLab/torch_cgx/',
-      download_url="https://github.com/IST-DASLab/torch_cgx/archive/refs/tags/v0.1.0.tar.gz",
+      download_url="https://github.com/IST-DASLab/torch_cgx/archive/refs/tags/v0.1.1.tar.gz",
       ext_modules=[cpp_extension.CUDAExtension('torch_cgx', sources=src,
                                               include_dirs=include_dirs,
                                               extra_compile_args={'cxx': cxx_compile_args, 'nvcc': nvcc_compile_args},
