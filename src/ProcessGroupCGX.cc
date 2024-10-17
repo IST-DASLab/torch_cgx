@@ -356,9 +356,10 @@ ProcessGroupCGX::broadcast(std::vector<at::Tensor> &tensors,
           MPI_CHECK(MPI_Type_commit(&dtype));
           mpiDatatype[data.scalar_type()] = dtype;
         }
-        MPI_CHECK(MPI_Bcast(data.data_ptr(), data.numel(),
-                            mpiDatatype.at(data.scalar_type()), opts.rootRank,
-                            pgComm_));
+        MPI_CHECK(MPI_Barrier(pgComm_));
+        //MPI_CHECK(MPI_Bcast(data.data_ptr(), data.numel(),
+        //                    mpiDatatype.at(data.scalar_type()), opts.rootRank,
+        //                    pgComm_));
       };
   auto entry = std::unique_ptr<WorkEntry>(
       new WorkEntry(&tensors, nullptr, std::move(runFunc)));
