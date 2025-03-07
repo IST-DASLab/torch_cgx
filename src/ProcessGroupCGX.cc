@@ -100,7 +100,7 @@ void checkSameSizeAndType(const at::Tensor &tensor,
                           const std::vector<at::Tensor> &tensors) {
   for (size_t i = 0; i < tensors.size(); ++i) {
     if ((tensors[i].numel() != tensor.numel()) ||
-        (tensors[i].type() != tensor.type())) {
+        (tensors[i].scalar_type() != tensor.scalar_type())) {
       throw std::runtime_error("Tensors are not equal in size or data type");
     }
     checkSingleTensorHelper(tensors[i]);
@@ -145,7 +145,7 @@ ProcessGroupCGX::AsyncWork::AsyncWork(
     MPI_Request request, std::vector<at::Tensor> outputTensors,
     const char *profilingTitle,
     const c10::optional<std::vector<at::Tensor>> &inputTensors)
-    : c10d::ProcessGroup::Work(-1, c10d::OpType::UNKNOWN, profilingTitle,
+    : c10d::Work(-1, c10d::OpType::UNKNOWN, profilingTitle,
                                inputTensors),
       outputTensors_(std::move(outputTensors)), request_(request) {
   memset(&status_, 0, sizeof(status_));
@@ -318,7 +318,7 @@ void ProcessGroupCGX::runLoop() {
   }
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::enqueue(
+c10::intrusive_ptr<c10d::Work> ProcessGroupCGX::enqueue(
     std::unique_ptr<WorkEntry> entry, const char *profilingTitle,
     const c10::optional<std::vector<at::Tensor>> &inputTensors, bool compressed,
     const std::shared_ptr<at::cuda::CUDAStream> stream) {
@@ -338,7 +338,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::enqueue(
   return work;
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::broadcast(std::vector<at::Tensor> &tensors,
                             const c10d::BroadcastOptions &opts) {
   checkSingleTensor(tensors);
@@ -366,7 +366,7 @@ ProcessGroupCGX::broadcast(std::vector<at::Tensor> &tensors,
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::allreduce(std::vector<at::Tensor> &tensors,
                             const c10d::AllreduceOptions &opts) {
   checkSingleTensor(tensors);
@@ -393,7 +393,7 @@ ProcessGroupCGX::allreduce(std::vector<at::Tensor> &tensors,
         c10::DeviceGuard guard(bucket.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
         if (do_compress) {
-          (c10::cuda::CUDACachingAllocator::getFreeMutex())->lock();
+          (c10::cuda::getFreeMutex())->lock();
           auto &cgx_event_start = *(cuda_start_events_.at(device_idx));
           auto &cgx_stream = *(streams_.at(device_idx));
           const auto &currentStream =
@@ -404,7 +404,7 @@ ProcessGroupCGX::allreduce(std::vector<at::Tensor> &tensors,
               bucket.storage().data_ptr(), cgx_stream);
           allreduce_operator->PerformOperation(bucket, cgx_stream);
           entry->endEvent_->record(cgx_stream);
-          (c10::cuda::CUDACachingAllocator::getFreeMutex())->unlock();
+          (c10::cuda::getFreeMutex())->unlock();
         } else {
           MPI_CHECK(MPI_Allreduce(MPI_IN_PLACE, bucket.data_ptr(),
                                   bucket.numel(),
@@ -419,7 +419,7 @@ ProcessGroupCGX::allreduce(std::vector<at::Tensor> &tensors,
                  streams_.at(device_idx));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::allreduce_coalesced(
     std::vector<at::Tensor> &tensors,
     const c10d::AllreduceCoalescedOptions &opts) {
@@ -427,7 +427,7 @@ ProcessGroupCGX::allreduce_coalesced(
       "allreduce_coalesced is currently not supported with MPI");
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::reduce(std::vector<at::Tensor> &tensors,
                          const c10d::ReduceOptions &opts) {
   checkSingleTensor(tensors);
@@ -451,7 +451,7 @@ ProcessGroupCGX::reduce(std::vector<at::Tensor> &tensors,
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
                             std::vector<at::Tensor> &inputTensors,
                             const c10d::AllgatherOptions &opts) {
@@ -491,7 +491,7 @@ ProcessGroupCGX::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
                  c10::optional<std::vector<at::Tensor>>(inputTensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::allgather_coalesced(
     std::vector<std::vector<at::Tensor>> & /* unused */,
     std::vector<at::Tensor> & /* unused */,
@@ -500,7 +500,7 @@ ProcessGroupCGX::allgather_coalesced(
       "ProcessGroupCGX does not support allgather_coalesced");
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
                          std::vector<at::Tensor> &inputTensors,
                          const c10d::GatherOptions &opts) {
@@ -563,7 +563,7 @@ ProcessGroupCGX::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
   }
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::scatter(std::vector<at::Tensor> &outputTensors,
                           std::vector<std::vector<at::Tensor>> &inputTensors,
                           const c10d::ScatterOptions &opts) {
@@ -628,14 +628,14 @@ ProcessGroupCGX::scatter(std::vector<at::Tensor> &outputTensors,
   }
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::reduce_scatter(
+c10::intrusive_ptr<c10d::Work> ProcessGroupCGX::reduce_scatter(
     std::vector<at::Tensor> &outputTensors,
     std::vector<std::vector<at::Tensor>> &inputTensors,
     const c10d::ReduceScatterOptions &opts) {
   throw std::runtime_error("ProcessGroupCGX does not support reduce_scatter");
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::alltoall_base(
+c10::intrusive_ptr<c10d::Work> ProcessGroupCGX::alltoall_base(
     at::Tensor &outputTensor, at::Tensor &inputTensor,
     std::vector<int64_t> &outputSplitSizes,
     std::vector<int64_t> &inputSplitSizes, const c10d::AllToAllOptions &opts) {
@@ -701,7 +701,7 @@ c10::intrusive_ptr<c10d::ProcessGroup::Work> ProcessGroupCGX::alltoall_base(
                    c10::optional<std::vector<at::Tensor>>(inputTensors));
   }
 }
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::alltoall(std::vector<at::Tensor> &outputTensors,
                            std::vector<at::Tensor> &inputTensors,
                            const c10d::AllToAllOptions &opts) {
@@ -752,7 +752,7 @@ ProcessGroupCGX::alltoall(std::vector<at::Tensor> &outputTensors,
                  c10::optional<std::vector<at::Tensor>>(inputTensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
   checkSingleTensor(tensors);
 
@@ -772,7 +772,7 @@ ProcessGroupCGX::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
       c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
   checkSingleTensor(tensors);
 
@@ -792,7 +792,7 @@ ProcessGroupCGX::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
       c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::recvAnysource(std::vector<at::Tensor> &tensors, int tag) {
   checkSingleTensor(tensors);
 
@@ -812,7 +812,7 @@ ProcessGroupCGX::recvAnysource(std::vector<at::Tensor> &tensors, int tag) {
       c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::barrier(const c10d::BarrierOptions &opts) {
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [this](std::unique_ptr<WorkEntry> &entry) {
@@ -824,7 +824,7 @@ ProcessGroupCGX::barrier(const c10d::BarrierOptions &opts) {
   return enqueue(std::move(entry), "mpi:barrier", c10::nullopt);
 }
 
-c10::intrusive_ptr<c10d::ProcessGroup::Work>
+c10::intrusive_ptr<c10d::Work>
 ProcessGroupCGX::_allgather_base(at::Tensor & /*unused */,
                                   at::Tensor & /*unused */,
                                   const c10d::AllgatherOptions & /*unused */) {
