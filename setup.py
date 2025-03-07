@@ -1,6 +1,7 @@
 from setuptools import setup, Extension
 from torch.utils import cpp_extension
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -11,15 +12,24 @@ src = ['src/mpi_allreduce_operations.cc', 'src/ProcessGroupCGX.cc',
        'src/common/compressor.cc', 'src/common/layer.cc', 'src/common/shm_utils.cc',
        'src/common/compression/gpu_compression_operations.cc', 'src/common/nccl_reduce.cc']
 
-MPI_HOME=os.environ.get("MPI_HOME", "/usr/local/mpi")
-NCCL_HOME=os.environ.get("NCCL_HOME", "/usr/local/nccl")
-NCCL_INCLUDE=os.environ.get("NCCL_INCLUDE", "/usr/local/nccl/include")
-NCCL_LIB=os.environ.get("NCCL_LIB", "/usr/local/nccl/lib")
-IS_CUDA=int(os.environ.get("CGX_CUDA", "1")) != 0
-CUDA_VECTORIZED=int(os.environ.get("CUDA_VECTORIZED", "1")) != 0
-QSGD_DETERMENISTIC=int(os.environ.get("QSGD_DETERMENISTIC", "1")) != 0
-link_args = ['-L'+ os.path.join(MPI_HOME, 'lib'), '-lmpi']
-ompi_info_bin=os.path.join(MPI_HOME, 'bin', 'ompi_info')
+
+def find_binary(name: str, paths: list):
+    # searches for a binary using all the given paths
+    for path in paths:
+        if (found := shutil.which(name, path=path)) is not None:
+            return found
+    return None
+
+
+MPI_HOME = os.environ.get("MPI_HOME", "/usr/local/mpi")
+NCCL_HOME = os.environ.get("NCCL_HOME", "/usr/local/nccl")
+NCCL_INCLUDE = os.environ.get("NCCL_INCLUDE", "/usr/local/nccl/include")
+NCCL_LIB = os.environ.get("NCCL_LIB", "/usr/local/nccl/lib")
+IS_CUDA = int(os.environ.get("CGX_CUDA", "1")) != 0
+CUDA_VECTORIZED = int(os.environ.get("CUDA_VECTORIZED", "1")) != 0
+QSGD_DETERMENISTIC = int(os.environ.get("QSGD_DETERMENISTIC", "1")) != 0
+link_args = ['-L' + os.path.join(MPI_HOME, 'lib'), '-lmpi']
+ompi_info_bin = find_binary("ompi_info", [None, os.path.join(MPI_HOME, 'bin')])
 env = os.environ
 try:
     ompi_info_out = subprocess.check_output([ompi_info_bin, '--parsable'], env=env)
