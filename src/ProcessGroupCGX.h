@@ -261,6 +261,15 @@ public:
     register_backend(CGX_BACKEND_NAME, py::cpp_function(createProcessGroupCGX));
   }
 
+  // setting/getting group name is required for FSPD
+  const std::string& getGroupName() const override {
+      return name_;
+  }
+
+  void setGroupName(const std::string& name) override {
+      name_ = name;
+  }
+
   // Support float16 in MPI
   static MPI_Datatype float16_type;
 
@@ -280,6 +289,7 @@ protected:
           const std::shared_ptr<at::cuda::CUDAStream> stream = nullptr);
 
   bool stop_;
+  std::string name_;
 
   std::mutex pgMutex_;
   std::thread workerThread_;
