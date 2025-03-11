@@ -22,12 +22,13 @@
 #include "communicator.h"
 #include <semaphore.h>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cgx::common {
 struct SHMCommunicator : public CommunicatorLocal {
   SHMCommunicator(std::shared_ptr<GPUContext> gpu_context)
-      : CommunicatorLocal(gpu_context) {
+      : CommunicatorLocal(std::move(gpu_context)) {
     communicator_type_ = CommunicatorType::SHM;
   }
 

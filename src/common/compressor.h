@@ -21,6 +21,7 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <utility>
 
 #include "buffer.h"
 #include "compression/gpu_compression_operations.h"
@@ -144,7 +145,7 @@ protected:
 class DummyCompressor : public Compressor {
 public:
   DummyCompressor(std::shared_ptr<GPUContext> gpu_context)
-      : Compressor(gpu_context) {}
+      : Compressor(std::move(gpu_context)) {}
 
   size_t CompressBuffer(unsigned char *input, unsigned char *output,
                         unsigned char *feedback, int num_elems,
@@ -163,7 +164,7 @@ public:
 class MaxMinQuantizer : public Quantizer {
 public:
   MaxMinQuantizer(std::shared_ptr<GPUContext> gpu_context)
-      : Quantizer(gpu_context) {}
+      : Quantizer(std::move(gpu_context)) {}
 
   size_t CompressBuffer(unsigned char *input, unsigned char *output,
                         unsigned char *feedback, int num_elems,
@@ -177,7 +178,7 @@ public:
   size_t BufferSize(int num_elems, size_t element_size,
                     const CompressionLayerConfig &config) final;
   bool isEnabled(const Layer &tensor) override;
-  virtual void Init(int elem_size, gpuStream_t stream);
+  void Init(int elem_size, gpuStream_t stream) override;
 };
 
 } // namespace cgx::common

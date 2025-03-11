@@ -19,11 +19,12 @@
 
 #pragma once
 #include "communicator.h"
+#include <utility>
 
 namespace cgx::common {
 
 struct MPICommunicator : public Communicator {
-  MPICommunicator(std::shared_ptr<GPUContext>gpu_context) : Communicator(gpu_context){
+  MPICommunicator(std::shared_ptr<GPUContext> gpu_context) : Communicator(std::move(gpu_context)){
     communicator_type_ = CommunicatorType::MPI;
   }
   virtual void Init(int world_size, void *ctx) override;

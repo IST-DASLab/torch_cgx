@@ -27,6 +27,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <torch/csrc/distributed/c10d/ProcessGroup.hpp>
@@ -57,7 +58,7 @@ struct WorkEntry {
                      std::function<void(std::unique_ptr<WorkEntry> &)> run,
                      std::shared_ptr<at::cuda::CUDAEvent> endEvent = nullptr)
       : dst(dstPtr ? *dstPtr : std::vector<at::Tensor>()), run(std::move(run)),
-        endEvent_(endEvent) {
+        endEvent_(std::move(endEvent)) {
     if (srcPtr) {
       src = *srcPtr;
     }
@@ -112,13 +113,13 @@ public:
             c10::nullopt,
         std::shared_ptr<at::cuda::CUDAEvent> endEvent = nullptr,
         bool compressed = false,
-        const std::shared_ptr<at::cuda::CUDAStream> stream = nullptr)
+        std::shared_ptr<at::cuda::CUDAStream> stream = nullptr)
         : c10d::Work(-1, c10d::OpType::UNKNOWN, profilingTitle,
                              inputTensors),
           outputTensors_(std::move(outputTensors)),
           future_(c10::make_intrusive<at::ivalue::Future>(
               c10::ListType::create(c10::TensorType::get()))),
-          endEvent_(endEvent), compressed_(compressed), cgx_stream(stream) {}
+          endEvent_(std::move(endEvent)), compressed_(compressed), cgx_stream(std::move(stream)) {}
 
     std::vector<at::Tensor> result() override;
     c10::intrusive_ptr<c10::ivalue::Future> getFuture() override;
@@ -286,7 +287,7 @@ protected:
   enqueue(std::unique_ptr<WorkEntry> entry, const char *profilingTitle,
           const c10::optional<std::vector<at::Tensor>> &inputTensors,
           bool compressed = false,
-          const std::shared_ptr<at::cuda::CUDAStream> stream = nullptr);
+          const std::shared_ptr<at::cuda::CUDAStream>& stream = nullptr);
 
   bool stop_;
   std::string name_;

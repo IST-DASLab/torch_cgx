@@ -321,7 +321,7 @@ void ProcessGroupCGX::runLoop() {
 c10::intrusive_ptr<c10d::Work> ProcessGroupCGX::enqueue(
     std::unique_ptr<WorkEntry> entry, const char *profilingTitle,
     const c10::optional<std::vector<at::Tensor>> &inputTensors, bool compressed,
-    const std::shared_ptr<at::cuda::CUDAStream> stream) {
+    const std::shared_ptr<at::cuda::CUDAStream>& stream) {
   auto work =
       c10::make_intrusive<WorkMPI>(entry->dst, profilingTitle, inputTensors,
                                    entry->endEvent_, compressed, stream);

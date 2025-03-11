@@ -18,13 +18,15 @@
  */
 
 #include "reducer.h"
+#include <utility>
+
 namespace cgx::common {
 
 Reducer::Reducer(std::shared_ptr<GPUContext> gpu_context,
                  std::shared_ptr<Compressor> compressor,
                  std::shared_ptr<Communicator> communicator)
-    : compressor_(compressor), gpu_context_(gpu_context),
-      communicator_(communicator) {
+    : compressor_(std::move(compressor)), gpu_context_(std::move(gpu_context)),
+      communicator_(std::move(communicator)) {
   unsigned int fusion_size_mb =
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   tensor_fusion_size_ = std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
