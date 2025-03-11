@@ -60,7 +60,7 @@ int shm_allocate(int fd, const int shmsize) {
 }
 
 int shm_map(int fd, const int shmsize, void **ptr) {
-  *ptr = mmap(NULL, shmsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  *ptr = mmap(nullptr, shmsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   return (*ptr == MAP_FAILED) ? -1 : 0;
 }
 
@@ -110,12 +110,12 @@ gpuError:
     shm_unlink(shmname);
   if (ptr != MAP_FAILED)
     munmap(ptr, shmsize);
-  *shmPtr = NULL;
+  *shmPtr = nullptr;
   return res;
 }
 
 int shmUnlink(const char *shmname) {
-  if (shmname != NULL)
+  if (shmname != nullptr)
     SYS_CHECK(shm_unlink(shmname), "shm_unlink");
   return 0;
 }

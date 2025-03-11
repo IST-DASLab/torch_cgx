@@ -27,29 +27,29 @@
 
 namespace cgx::common {
 struct SHMCommunicator : public CommunicatorLocal {
-  SHMCommunicator(std::shared_ptr<GPUContext> gpu_context)
+  explicit SHMCommunicator(std::shared_ptr<GPUContext> gpu_context)
       : CommunicatorLocal(std::move(gpu_context)) {
     communicator_type_ = CommunicatorType::SHM;
   }
 
   ~SHMCommunicator();
 
-  virtual void Init(int world_size, void *ctx) override;
-  virtual void ISend(void *buf, size_t buf_size, int peer_rank,
-                     gpuStream_t stream) override;
-  virtual void IRecv(void *buf, size_t buf_size, int peer_rank,
-                     gpuStream_t stream) override;
-  virtual void WaitSend(int rank) override;
-  virtual void WaitRecv(int rank) override;
-  virtual void WaitAllSend() override;
-  virtual void WaitAllRecv() override;
-  virtual int TestRecv(int rank) override;
-  virtual void *GetRemoteBuftoSend(int peer_rank) override;
-  virtual void *GetRemoteBuftoRecv(int peer_rank) override;
-  virtual void *GetRemoteBroadcastBuftoSend() override;
-  virtual void *GetRemoteBroadcastBuftoRecv(int peer_rank) override;
-  virtual void CommitSend(int peer_rank, gpuStream_t stream) override;
-  virtual int TestRemote(int peer_rank, gpuStream_t stream) override;
+  void Init(int world_size, void *ctx) override;
+  void ISend(void *buf, size_t buf_size, int peer_rank,
+             gpuStream_t stream) override;
+  void IRecv(void *buf, size_t buf_size, int peer_rank,
+             gpuStream_t stream) override;
+  void WaitSend(int rank) override;
+  void WaitRecv(int rank) override;
+  void WaitAllSend() override;
+  void WaitAllRecv() override;
+  int TestRecv(int rank) override;
+  void *GetRemoteBuftoSend(int peer_rank) override;
+  void *GetRemoteBuftoRecv(int peer_rank) override;
+  void *GetRemoteBroadcastBuftoSend() override;
+  void *GetRemoteBroadcastBuftoRecv(int peer_rank) override;
+  void CommitSend(int peer_rank, gpuStream_t stream) override;
+  int TestRemote(int peer_rank, gpuStream_t stream) override;
 
 private:
   struct gpuEventSync {

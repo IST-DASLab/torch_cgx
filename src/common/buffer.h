@@ -23,7 +23,7 @@
 namespace cgx::common {
 
 struct PersistentBuffer {
-  PersistentBuffer(size_t size);
+  explicit PersistentBuffer(size_t size);
   void* RawPointer() const;
 private:
   at::Tensor tensor_;

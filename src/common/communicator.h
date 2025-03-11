@@ -27,7 +27,7 @@ namespace cgx::common {
 
 struct Communicator {
   enum CommunicatorType { MPI, SHM };
-  Communicator(std::shared_ptr<GPUContext> gpu_context)
+  explicit Communicator(std::shared_ptr<GPUContext> gpu_context)
       : gpu_context_(std::move(gpu_context)) {}
   virtual void Init(int world_size, void *ctx) = 0;
   virtual void ISend(void *buf, size_t buf_size, int peer_rank,
@@ -52,7 +52,7 @@ protected:
 };
 
 struct CommunicatorLocal : Communicator {
-  CommunicatorLocal(std::shared_ptr<GPUContext> gpu_context)
+  explicit CommunicatorLocal(std::shared_ptr<GPUContext> gpu_context)
       : Communicator(std::move(gpu_context)) {}
   virtual void *GetRemoteBuftoSend(int peer_rank) = 0;
   virtual void *GetRemoteBuftoRecv(int peer_rank) = 0;

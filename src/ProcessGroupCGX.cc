@@ -642,7 +642,7 @@ c10::intrusive_ptr<c10d::Work> ProcessGroupCGX::alltoall_base(
   checkSingleTensorHelper(inputTensor);
   checkSingleTensorHelper(outputTensor);
 
-  if (outputSplitSizes.size() == 0 && inputSplitSizes.size() == 0) {
+  if (outputSplitSizes.empty() && inputSplitSizes.empty()) {
     // We can use alltoall
     TORCH_CHECK(outputTensor.numel() == inputTensor.numel() &&
                     outputTensor.type() == inputTensor.type(),

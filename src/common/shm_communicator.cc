@@ -189,7 +189,7 @@ void SHMCommunicator::WaitAllRecv() {
       continue;
     nodes.push_back(peer_rank);
   }
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       if (TestRecv(nodes[i])) {
         nodes.erase(nodes.begin() + i);
