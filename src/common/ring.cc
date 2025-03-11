@@ -18,15 +18,15 @@
  */
 
 #include "ring.h"
+#include <utility>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 MPI_Allreduce_Ring::MPI_Allreduce_Ring(
     std::shared_ptr<common::GPUContext> gpu_context,
     std::shared_ptr<Compressor> compressor,
     std::shared_ptr<Communicator> communicator, int world_size)
-    : MPIReducer(gpu_context, compressor, communicator) {
+    : MPIReducer(std::move(gpu_context), std::move(compressor), std::move(communicator)) {
   int64_t chunk_size = tensor_fusion_size_;
   chunk_size = utils::aligned_size((chunk_size + world_size - 1) / world_size);
   int64_t buffer_size = chunk_size * world_size + chunk_size * (world_size - 1);
@@ -225,5 +225,4 @@ int MPI_Allreduce_Ring::AllreduceDivisionCompressed(int num_elements,
   return 0;
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

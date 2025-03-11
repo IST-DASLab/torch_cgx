@@ -21,8 +21,7 @@
 
 #include "reducer.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class MPI_Allreduce_Ring : public MPIReducer {
 public:
@@ -44,5 +43,4 @@ private:
                                     gpuStream_t gpu_stream);
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

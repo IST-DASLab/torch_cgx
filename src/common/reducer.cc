@@ -18,14 +18,15 @@
  */
 
 #include "reducer.h"
-namespace cgx {
-namespace common {
+#include <utility>
+
+namespace cgx::common {
 
 Reducer::Reducer(std::shared_ptr<GPUContext> gpu_context,
                  std::shared_ptr<Compressor> compressor,
                  std::shared_ptr<Communicator> communicator)
-    : compressor_(compressor), gpu_context_(gpu_context),
-      communicator_(communicator) {
+    : compressor_(std::move(compressor)), gpu_context_(std::move(gpu_context)),
+      communicator_(std::move(communicator)) {
   unsigned int fusion_size_mb =
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   tensor_fusion_size_ = std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
@@ -69,7 +70,7 @@ int Reducer::AllReduceAlltoAll(int num_elements, int global_offset,
   }
   communicator_->WaitAllSend();
 
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -158,5 +159,4 @@ int Reducer::Broadcast(int num_elements, int global_offset,
   return 0;
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

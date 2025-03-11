@@ -62,8 +62,7 @@ using gpuIpcEventHandle_t = hipIpcEventHandle_t;
 #include <torch/torch.h>
 #endif
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class GPUContext {
 public:
@@ -99,5 +98,4 @@ private:
   class impl;
   std::unique_ptr<impl> pimpl;
 };
-} // namespace common
-}// namespace cgx
+} // namespace cgx::common

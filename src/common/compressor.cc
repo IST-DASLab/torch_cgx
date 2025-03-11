@@ -18,18 +18,18 @@
  */
 
 #include "compressor.h"
+#include <utility>
 #include "common.h"
 #include "utils.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 std::unordered_map<LayerId, CompressionLayerConfig, Compressor::hash_laierid>
     Compressor::layers_configs;
 CompressionLayerConfig Compressor::default_config;
 
 Compressor::Compressor(std::shared_ptr<GPUContext> gpu_context)
-    : gpu_context_(gpu_context) {
+    : gpu_context_(std::move(gpu_context)) {
   unsigned int fusion_size_mb =
       utils::GetIntEnvOrDefault(FUSION_BUFFER_SIZE_MB, FUSION_SIZE_DEFAULT_MB);
   tensor_fusion_size_ = std::max(fusion_size_mb * 1024 * 1024, MIN_FUSION_SIZE);
@@ -253,7 +253,7 @@ bool DummyCompressor::isEnabled(const Layer &layer) {
 }
 
 Quantizer::Quantizer(std::shared_ptr<GPUContext> gpu_context)
-    : Compressor(gpu_context) {}
+    : Compressor(std::move(gpu_context)) {}
 
 void Quantizer::ResetParamsFromEnv() {
   Compressor::ResetParamsFromEnv();
@@ -442,5 +442,4 @@ void MaxMinQuantizer::Init(int element_size, gpuStream_t stream) {
   }
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

@@ -20,8 +20,7 @@
 #include "mpi_context.h"
 #include "common.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 MPIContext::MPIContext() {
   MPI_CHECK(MPI_Comm_dup(MPI_COMM_WORLD, &global_comm_));
@@ -51,5 +50,4 @@ void MPIContext::Barrier(MPI_Comm comm) const {
   MPI_CHECK(MPI_Barrier(comm));
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

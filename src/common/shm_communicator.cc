@@ -21,8 +21,7 @@
     }                                                                          \
   } while (0)
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 const char *sendSemFmt = "/cgx-sem-send-%d-%d";
 const char *recvSemFmt = "/cgx-sem-recv-%d-%d";
@@ -190,7 +189,7 @@ void SHMCommunicator::WaitAllRecv() {
       continue;
     nodes.push_back(peer_rank);
   }
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       if (TestRecv(nodes[i])) {
         nodes.erase(nodes.begin() + i);
@@ -353,5 +352,4 @@ void SHMCommunicator::unlinkSem(int peer_rank) {
   TRIV_CHECK(sem_unlink(semName));
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

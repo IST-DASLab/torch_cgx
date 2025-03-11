@@ -20,10 +20,10 @@
 #include "scatter_reduce_allgather.h"
 
 #include "assert.h"
+#include <utility>
 #include "compression/gpu_common.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 void printDebug(void *buf, int numel, gpuStream_t gpu_stream) {
   float *host_buf = new float[numel];
@@ -41,7 +41,7 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
     std::shared_ptr<GPUContext> gpu_context,
     std::shared_ptr<Compressor> compressor,
     std::shared_ptr<Communicator> communicator, int world_size)
-    : MPIReducer(gpu_context, compressor, communicator) {
+    : MPIReducer(std::move(gpu_context), std::move(compressor), std::move(communicator)) {
   int64_t chunk_size = tensor_fusion_size_;
   all_to_all_reduction_ =
       utils::GetIntEnvOrDefault(DEBUG_ALL_TO_ALL_REDUCTION, 0);
@@ -140,7 +140,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressed(
     send_sizes.pop();
     nodes.push_back(node_rank);
   }
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -183,7 +183,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressed(
     nodes.push_back(node_rank);
   }
   int their_start_offset;
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -291,7 +291,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAllCompressed(
   communicator_->WaitAllSend();
   compressor_->Decompress(gradients_send_, layers, global_offset, num_elements,
                           false, gpu_stream);
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -353,7 +353,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceUncompressed(
     }
     send_buf = send_buf_base + offsets[rank] * element_size;
     recv_buf = gradients_recv_;
-    while (nodes.size() > 0) {
+    while (!nodes.empty()) {
       for (int i = 0; i < nodes.size(); i++) {
         auto &node_rank = nodes[i];
         if (communicator_->TestRecv(node_rank) > 0) {
@@ -412,5 +412,4 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceUncompressed(
   return 0;
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

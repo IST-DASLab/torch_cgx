@@ -19,9 +19,7 @@
 
 #pragma once
 
-namespace cgx {
-namespace common {
-namespace utils {
+namespace cgx::common::utils {
 const int MAX_SHM_NAME_LEN = 1024;
 
 int shmOpen(const char *shmname, const int shmsize, void **shmPtr,
@@ -31,6 +29,4 @@ int shmUnlink(const char *shmname);
 
 int shmClose(void *shmPtr, void *devShmPtr, const int shmsize);
 
-} // namespace utils
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::utils

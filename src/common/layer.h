@@ -22,12 +22,11 @@
 #include <torch/torch.h>
 #include <utility>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 using LayerId = std::pair<unsigned, unsigned>;
 
 struct Layer {
-  Layer(const at::Tensor& tensor);
+  explicit Layer(const at::Tensor& tensor);
   Layer(const at::Tensor& tensor, const LayerId& layer_id,
         void* ptr, int numel);
   const LayerId& layer_id() const {return layer_id_;}
@@ -45,5 +44,5 @@ private:
   int64_t device_index_;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common
+

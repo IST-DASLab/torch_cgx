@@ -19,11 +19,10 @@
 
 #include "mpi_communicator.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 void MPICommunicator::Init(int world_size, void *ctx) {
-  if (recv_requests.size() == 0) {
+  if (recv_requests.empty()) {
     for (int i = 0; i < world_size; i++) {
       recv_requests.push_back(MPI_REQUEST_NULL);
       send_requests.push_back(MPI_REQUEST_NULL);
@@ -84,5 +83,5 @@ void MPICommunicator::WaitAllRecv() {
   }
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common
+

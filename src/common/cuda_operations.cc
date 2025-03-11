@@ -19,8 +19,7 @@
 
 #include <thread>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class GPUContext::impl {
 public:
@@ -139,5 +138,4 @@ private:
 
 #include "gpu_context_impl.cc"
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

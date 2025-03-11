@@ -22,9 +22,8 @@
 #include "gpu_fp16_util.h"
 #include "gpu_rand.h"
 
-namespace cgx {
-namespace common {
-namespace gpu {
+namespace cgx::common::gpu {
+
 #if CUDA_VECTORIZED
 const bool VECTORIZE_COMPRESS = true;
 const bool VECTORIZE_DECOMPRESS = true;
@@ -831,6 +830,4 @@ template void CUDA_dequantize_maxmin<Half, false>(
     const unsigned char *input_data, unsigned char *output_data, int num_elems,
     int bits, int bucket_size, cudaStream_t stream);
 
-} // namespace gpu
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::gpu
