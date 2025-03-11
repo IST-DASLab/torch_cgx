@@ -48,10 +48,7 @@
   } while (false)
 
 
-namespace cgx {
-namespace common {
-namespace utils {
-
+namespace cgx::common::utils {
 
 int shm_allocate(int fd, const int shmsize) {
   int err = posix_fallocate(fd, 0, shmsize);
@@ -136,7 +133,4 @@ int shmClose(void *shmPtr, void *devShmPtr, const int shmsize) {
   return 0;
 }
 
-} // namespace utils
-} // namespace common
-} // namespace cgx
-
+} // namespace cgx::common::utils

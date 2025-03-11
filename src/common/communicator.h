@@ -22,8 +22,8 @@
 #include "gpu_context.h"
 #include <mpi.h>
 
-namespace cgx {
-namespace common {
+
+namespace cgx::common {
 
 struct Communicator {
   enum CommunicatorType { MPI, SHM };
@@ -62,5 +62,4 @@ struct CommunicatorLocal : Communicator {
   virtual int TestRemote(int peer_rank, gpuStream_t stream) = 0;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

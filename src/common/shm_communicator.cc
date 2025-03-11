@@ -21,8 +21,7 @@
     }                                                                          \
   } while (0)
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 const char *sendSemFmt = "/cgx-sem-send-%d-%d";
 const char *recvSemFmt = "/cgx-sem-recv-%d-%d";
@@ -353,5 +352,4 @@ void SHMCommunicator::unlinkSem(int peer_rank) {
   TRIV_CHECK(sem_unlink(semName));
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

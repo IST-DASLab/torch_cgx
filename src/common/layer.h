@@ -22,8 +22,7 @@
 #include <torch/torch.h>
 #include <utility>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 using LayerId = std::pair<unsigned, unsigned>;
 
 struct Layer {
@@ -45,5 +44,5 @@ private:
   int64_t device_index_;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common
+

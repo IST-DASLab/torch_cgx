@@ -20,8 +20,7 @@
 #pragma once
 #include <torch/torch.h>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 struct PersistentBuffer {
   PersistentBuffer(size_t size);
@@ -31,5 +30,4 @@ private:
 };
 
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

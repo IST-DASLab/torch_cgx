@@ -22,8 +22,7 @@
 #include "assert.h"
 #include "compression/gpu_common.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 void printDebug(void *buf, int numel, gpuStream_t gpu_stream) {
   float *host_buf = new float[numel];
@@ -412,5 +411,4 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceUncompressed(
   return 0;
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

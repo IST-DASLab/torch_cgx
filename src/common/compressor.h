@@ -27,8 +27,7 @@
 #include "gpu_context.h"
 #include "layer.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 const int COMPRESSION_DEFAULT_BUCKET_SIZE = 512;
 
 struct CompressionLayerConfig {
@@ -181,5 +180,4 @@ public:
   virtual void Init(int elem_size, gpuStream_t stream);
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common
