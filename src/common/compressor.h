@@ -44,7 +44,7 @@ struct CompressionLayerConfig {
 
 class Compressor {
 public:
-  Compressor(std::shared_ptr<GPUContext> gpu_context);
+  explicit Compressor(std::shared_ptr<GPUContext> gpu_context);
   virtual ~Compressor() = default;
   // Returns size of buffer to allocate for usage in compress (in bytes). We
   // assume that no compression will be done in-place.
@@ -144,7 +144,7 @@ protected:
 
 class DummyCompressor : public Compressor {
 public:
-  DummyCompressor(std::shared_ptr<GPUContext> gpu_context)
+  explicit DummyCompressor(std::shared_ptr<GPUContext> gpu_context)
       : Compressor(std::move(gpu_context)) {}
 
   size_t CompressBuffer(unsigned char *input, unsigned char *output,
@@ -163,7 +163,7 @@ public:
 
 class MaxMinQuantizer : public Quantizer {
 public:
-  MaxMinQuantizer(std::shared_ptr<GPUContext> gpu_context)
+  explicit MaxMinQuantizer(std::shared_ptr<GPUContext> gpu_context)
       : Quantizer(std::move(gpu_context)) {}
 
   size_t CompressBuffer(unsigned char *input, unsigned char *output,

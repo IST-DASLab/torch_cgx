@@ -58,7 +58,7 @@ public:
   void StreamCreate(hipStream_t *stream) {
     int greatest_priority;
     ErrorCheck("hipDeviceGetStreamPriorityRange",
-               hipDeviceGetStreamPriorityRange(NULL, &greatest_priority));
+               hipDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
     ErrorCheck("hipStreamCreateWithPriority",
                hipStreamCreateWithPriority(stream,
                                            hipStreamNonBlocking,

@@ -437,7 +437,8 @@ void MaxMinQuantizer::Init(int element_size, gpuStream_t stream) {
                                                      metainfo_buf_size);
 #if !QSGD_DETERMENISTIC
     rand_states_ = static_cast<gpu::RandState *>(aux_buffer_->RawPointer());
-    gpu::init_rand_states(rand_states_, max_num_elems, time(NULL), stream);
+    // TODO allow setting a seed!
+    gpu::init_rand_states(rand_states_, max_num_elems, time(nullptr), stream);
 #endif
   }
 }

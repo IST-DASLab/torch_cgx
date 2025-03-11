@@ -24,19 +24,19 @@
 namespace cgx::common {
 
 struct MPICommunicator : public Communicator {
-  MPICommunicator(std::shared_ptr<GPUContext> gpu_context) : Communicator(std::move(gpu_context)){
+  explicit MPICommunicator(std::shared_ptr<GPUContext> gpu_context) : Communicator(std::move(gpu_context)){
     communicator_type_ = CommunicatorType::MPI;
   }
-  virtual void Init(int world_size, void *ctx) override;
-  virtual void ISend(void *buf, size_t buf_size, int peer_rank,
-                     gpuStream_t stream) override;
-  virtual void IRecv(void *buf, size_t buf_size, int peer_rank,
-                     gpuStream_t stream) override;
-  virtual void WaitSend(int peer_rank) override;
-  virtual void WaitRecv(int peer_rank) override;
-  virtual void WaitAllSend() override;
-  virtual void WaitAllRecv() override;
-  virtual int TestRecv(int rank) override;
+  void Init(int world_size, void *ctx) override;
+  void ISend(void *buf, size_t buf_size, int peer_rank,
+             gpuStream_t stream) override;
+  void IRecv(void *buf, size_t buf_size, int peer_rank,
+             gpuStream_t stream) override;
+  void WaitSend(int peer_rank) override;
+  void WaitRecv(int peer_rank) override;
+  void WaitAllSend() override;
+  void WaitAllRecv() override;
+  int TestRecv(int rank) override;
 protected:
   std::vector<MPI_Request> send_requests;
   std::vector<MPI_Request> recv_requests;

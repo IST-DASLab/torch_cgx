@@ -140,7 +140,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressed(
     send_sizes.pop();
     nodes.push_back(node_rank);
   }
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -183,7 +183,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceCompressed(
     nodes.push_back(node_rank);
   }
   int their_start_offset;
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -291,7 +291,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllReduceAlltoAllCompressed(
   communicator_->WaitAllSend();
   compressor_->Decompress(gradients_send_, layers, global_offset, num_elements,
                           false, gpu_stream);
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -353,7 +353,7 @@ int MPI_Allreduce_ScatterReduceAllgather::AllreduceUncompressed(
     }
     send_buf = send_buf_base + offsets[rank] * element_size;
     recv_buf = gradients_recv_;
-    while (nodes.size() > 0) {
+    while (!nodes.empty()) {
       for (int i = 0; i < nodes.size(); i++) {
         auto &node_rank = nodes[i];
         if (communicator_->TestRecv(node_rank) > 0) {
