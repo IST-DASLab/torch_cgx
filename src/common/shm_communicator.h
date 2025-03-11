@@ -24,8 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 struct SHMCommunicator : public CommunicatorLocal {
   SHMCommunicator(std::shared_ptr<GPUContext> gpu_context)
       : CommunicatorLocal(gpu_context) {
@@ -100,5 +99,4 @@ private:
   bool initialized_ = false;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

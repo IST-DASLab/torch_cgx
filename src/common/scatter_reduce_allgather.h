@@ -21,8 +21,7 @@
 #include "reducer.h"
 #include "communicator.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class MPI_Allreduce_ScatterReduceAllgather : public MPIReducer {
 public:
@@ -55,5 +54,4 @@ private:
   unsigned counter_ = 0;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

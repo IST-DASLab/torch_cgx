@@ -30,8 +30,7 @@
 #include "shm_communicator.h"
 #endif
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class Reducer {
 public:
@@ -73,5 +72,4 @@ public:
 };
 
 void printDebug(unsigned char *buf, int numel);
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

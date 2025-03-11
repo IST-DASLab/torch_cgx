@@ -21,8 +21,7 @@
 #include "reducer.h"
 #include <nccl.h>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class NCCL_Reduce : public Reducer {
 public:
@@ -57,5 +56,4 @@ private:
   ncclComm_t nccl_comm_;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

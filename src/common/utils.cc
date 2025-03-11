@@ -20,9 +20,7 @@
 #include "utils.h"
 #include <string>
 
-namespace cgx {
-namespace common {
-namespace utils {
+namespace cgx::common::utils {
 
 int GetIntEnvOrDefault(const char *env_variable, int default_value) {
   auto env_value = std::getenv(env_variable);
@@ -92,6 +90,4 @@ size_t aligned_size(size_t size) {
   return round_to(size, ALIGNMENT_UNIT);
 }
 
-} // namespace utils
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::utils

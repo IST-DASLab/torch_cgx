@@ -20,8 +20,7 @@
 #include "nccl_reduce.h"
 #include <map>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 std::map<at::ScalarType, ncclDataType_t> ncclDatatype = {
     {at::kByte, ncclInt8},   {at::kChar, ncclChar}, {at::kDouble, ncclFloat64},
@@ -244,5 +243,4 @@ void NCCL_Reduce::UnfuseLayerData(unsigned char *layers_data,
   }
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

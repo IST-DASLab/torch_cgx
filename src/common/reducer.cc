@@ -18,8 +18,7 @@
  */
 
 #include "reducer.h"
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 Reducer::Reducer(std::shared_ptr<GPUContext> gpu_context,
                  std::shared_ptr<Compressor> compressor,
@@ -69,7 +68,7 @@ int Reducer::AllReduceAlltoAll(int num_elements, int global_offset,
   }
   communicator_->WaitAllSend();
 
-  while (nodes.size() > 0) {
+  while (!nodes.empty()) {
     for (int i = 0; i < nodes.size(); i++) {
       auto &node_rank = nodes.at(i);
       if (communicator_->TestRecv(node_rank) > 0) {
@@ -158,5 +157,4 @@ int Reducer::Broadcast(int num_elements, int global_offset,
   return 0;
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

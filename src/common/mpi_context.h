@@ -20,8 +20,7 @@
 #pragma once
 #include <mpi.h>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 struct MPIContext {
   MPIContext();
@@ -37,7 +36,4 @@ private:
   MPI_Comm cross_comm_;
 };
 
-} // namespace common
-} // namespace cgx
-
-
+} // namespace cgx::common

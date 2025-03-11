@@ -20,8 +20,7 @@
 #pragma once
 #include "communicator.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 struct MPICommunicator : public Communicator {
   MPICommunicator(std::shared_ptr<GPUContext>gpu_context) : Communicator(gpu_context){
@@ -42,5 +41,4 @@ protected:
   std::vector<MPI_Request> recv_requests;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

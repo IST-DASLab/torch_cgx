@@ -19,8 +19,7 @@
 
 #include "ring.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 MPI_Allreduce_Ring::MPI_Allreduce_Ring(
     std::shared_ptr<common::GPUContext> gpu_context,
@@ -225,5 +224,4 @@ int MPI_Allreduce_Ring::AllreduceDivisionCompressed(int num_elements,
   return 0;
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

@@ -21,8 +21,7 @@
 #include "common.h"
 #include "utils.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 std::unordered_map<LayerId, CompressionLayerConfig, Compressor::hash_laierid>
     Compressor::layers_configs;
@@ -442,5 +441,4 @@ void MaxMinQuantizer::Init(int element_size, gpuStream_t stream) {
   }
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common
