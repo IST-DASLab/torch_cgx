@@ -20,6 +20,7 @@
 #include "scatter_reduce_allgather.h"
 
 #include "assert.h"
+#include <utility>
 #include "compression/gpu_common.h"
 
 namespace cgx::common {
@@ -40,7 +41,7 @@ MPI_Allreduce_ScatterReduceAllgather::MPI_Allreduce_ScatterReduceAllgather(
     std::shared_ptr<GPUContext> gpu_context,
     std::shared_ptr<Compressor> compressor,
     std::shared_ptr<Communicator> communicator, int world_size)
-    : MPIReducer(gpu_context, compressor, communicator) {
+    : MPIReducer(std::move(gpu_context), std::move(compressor), std::move(communicator)) {
   int64_t chunk_size = tensor_fusion_size_;
   all_to_all_reduction_ =
       utils::GetIntEnvOrDefault(DEBUG_ALL_TO_ALL_REDUCTION, 0);

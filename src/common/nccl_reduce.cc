@@ -19,6 +19,7 @@
 
 #include "nccl_reduce.h"
 #include <map>
+#include <utility>
 
 namespace cgx::common {
 
@@ -29,7 +30,7 @@ std::map<at::ScalarType, ncclDataType_t> ncclDatatype = {
 
 NCCL_Reduce::NCCL_Reduce(std::shared_ptr<GPUContext> gpu_context,
                          std::shared_ptr<Compressor> compressor, int world_size)
-    : Reducer(gpu_context, compressor) {
+    : Reducer(std::move(gpu_context), std::move(compressor)) {
   nccl_comm_ = nullptr;
   int64_t chunk_size = tensor_fusion_size_;
   chunk_size = utils::aligned_size((chunk_size + world_size - 1) / world_size);
