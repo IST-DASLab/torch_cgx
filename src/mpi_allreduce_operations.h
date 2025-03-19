@@ -39,7 +39,7 @@ struct MPIAllReduce_Operation {
                             int quantization_bits, int bucket_size) {
     assert(layers_sizes_.size() >= bucket_idx && "Registering bucket out of order is not supported");
     if (layers_sizes_.size() == bucket_idx) {
-      layers_sizes_.emplace_back(std::vector<unsigned>());
+      layers_sizes_.emplace_back();
     }
     assert(layers_sizes_[bucket_idx].size() >= layer_idx && "Registering layer out of order is not supported");
     layers_sizes_[bucket_idx].push_back(layer_numel);

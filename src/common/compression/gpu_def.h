@@ -18,12 +18,12 @@
  */
 
 #pragma once
-using uint64_t = unsigned long long int;
+#include <cstdint>
 
 namespace cgx::common::gpu {
 
 struct xorshift128p_state {
-  uint64_t a, b;
+  std::uint64_t a, b;
 };
 
 using Half = __half;

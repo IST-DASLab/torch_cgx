@@ -17,7 +17,7 @@
 
 #include "gpu_context.h"
 
-#include <thread>
+#include <mutex>
 
 namespace cgx::common {
 

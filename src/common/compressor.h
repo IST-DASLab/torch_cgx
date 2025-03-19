@@ -35,7 +35,7 @@ struct CompressionLayerConfig {
   int quantization_bits;
   int bucket_size;
   bool skip_incomplete_buckets;
-  bool operator==(const CompressionLayerConfig &b) {
+  bool operator==(const CompressionLayerConfig &b) const {
     return quantization_bits == b.quantization_bits and
            bucket_size == b.bucket_size and
            skip_incomplete_buckets == b.skip_incomplete_buckets;
