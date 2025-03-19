@@ -17,9 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace cgx {
-namespace common {
-namespace gpu {
+namespace cgx::common::gpu {
 
 inline __device__ uint64_t splitmix64(uint64_t* seed) {
   uint64_t result = *seed;
@@ -60,6 +58,4 @@ __device__ float GetRand(RandState* state_p) {
 }
 
 
-} // namespace gpu
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::gpu

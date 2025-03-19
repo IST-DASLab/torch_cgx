@@ -24,9 +24,8 @@
 #elif HAVE_ROCM
 #include "hip_compression_operations.h"
 #endif
-namespace cgx {
-namespace common {
-namespace gpu {
+
+namespace cgx::common::gpu {
 
 size_t get_curand_array_size(int num_elems) {
   return BLOCKS_PER_GRID(num_elems, MAX_THREADS_PER_BLOCK)
@@ -156,6 +155,4 @@ void add<float>(int n,
 template
 void add<Half>(int n, const Half *x, Half *y, Half *sum, gpuStream_t stream);
 
-} // namespace gpu
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::gpu

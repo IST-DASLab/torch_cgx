@@ -17,13 +17,13 @@
 
 #include "gpu_context.h"
 
-#include <thread>
-namespace cgx {
-namespace common {
+#include <mutex>
+
+namespace cgx::common {
 
 class GPUContext::impl {
 public:
-  void ErrorCheck(std::string op_name, hipError_t hip_result) {
+  void ErrorCheck(const char* op_name, hipError_t hip_result) {
     if (hip_result != hipSuccess) {
       throw std::logic_error(
           std::string(op_name) + " failed: " + hipGetErrorString(hip_result));
@@ -58,7 +58,7 @@ public:
   void StreamCreate(hipStream_t *stream) {
     int greatest_priority;
     ErrorCheck("hipDeviceGetStreamPriorityRange",
-               hipDeviceGetStreamPriorityRange(NULL, &greatest_priority));
+               hipDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
     ErrorCheck("hipStreamCreateWithPriority",
                hipStreamCreateWithPriority(stream,
                                            hipStreamNonBlocking,
@@ -128,6 +128,4 @@ private:
 
 #include "gpu_context_impl.cc"
 
-} // namespace common
-} // namespace cgx
-
+} // namespace cgx::common

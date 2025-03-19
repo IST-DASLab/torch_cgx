@@ -25,9 +25,7 @@
 #include <hip/hip_fp16.h>
 #endif
 
-namespace cgx {
-namespace common {
-namespace gpu {
+namespace cgx::common::gpu {
 
 
 __device__ __half hmax(__half a, __half b) { return __hge(a, b) ? a : b; }
@@ -227,5 +225,3 @@ __global__ void float2half(float* input, __half* output, int numel) {
 }
 
 } // namespace cuda
-} // namespace common
-} // namespace cgx

@@ -19,8 +19,7 @@
 
 #include "layer.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 Layer::Layer(const at::Tensor &tensor) {
   data_ = tensor.data_ptr();
@@ -41,5 +40,4 @@ Layer::Layer(const at::Tensor &tensor, const LayerId &layer_id,
   device_index_ = tensor.get_device();
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

@@ -25,9 +25,7 @@
 #include <torch/torch.h>
 #endif
 
-namespace cgx {
-namespace common {
-namespace utils {
+namespace cgx::common::utils {
 
 enum CommunicatorType {
   MPI,
@@ -58,6 +56,4 @@ size_t aligned_size(size_t size);
 CommunicatorType GetCommTypeFromEnv(const char* env, CommunicatorType default_value);
 ReductionType GetRedTypeFromEnv(const char* env, ReductionType default_value);
 
-} // namespace utils
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::utils

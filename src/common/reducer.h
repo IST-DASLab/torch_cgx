@@ -24,14 +24,14 @@
 #include "gpu_context.h"
 #include "utils.h"
 #include <mpi.h>
+#include <utility>
 
 #include "mpi_communicator.h"
 #if HAVE_CUDA
 #include "shm_communicator.h"
 #endif
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class Reducer {
 public:
@@ -69,9 +69,8 @@ public:
   MPIReducer(std::shared_ptr<common::GPUContext> gpu_context,
              std::shared_ptr<Compressor> compressor,
              std::shared_ptr<Communicator> communicator)
-      : Reducer(gpu_context, compressor, communicator) {}
+      : Reducer(std::move(gpu_context), std::move(compressor), std::move(communicator)) {}
 };
 
 void printDebug(unsigned char *buf, int numel);
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

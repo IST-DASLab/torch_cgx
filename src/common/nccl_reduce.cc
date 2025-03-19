@@ -19,9 +19,9 @@
 
 #include "nccl_reduce.h"
 #include <map>
+#include <utility>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 std::map<at::ScalarType, ncclDataType_t> ncclDatatype = {
     {at::kByte, ncclInt8},   {at::kChar, ncclChar}, {at::kDouble, ncclFloat64},
@@ -30,7 +30,7 @@ std::map<at::ScalarType, ncclDataType_t> ncclDatatype = {
 
 NCCL_Reduce::NCCL_Reduce(std::shared_ptr<GPUContext> gpu_context,
                          std::shared_ptr<Compressor> compressor, int world_size)
-    : Reducer(gpu_context, compressor) {
+    : Reducer(std::move(gpu_context), std::move(compressor)) {
   nccl_comm_ = nullptr;
   int64_t chunk_size = tensor_fusion_size_;
   chunk_size = utils::aligned_size((chunk_size + world_size - 1) / world_size);
@@ -41,7 +41,7 @@ NCCL_Reduce::NCCL_Reduce(std::shared_ptr<GPUContext> gpu_context,
   gradients_recv_ = gradients_send_ + chunk_size * world_size;
 }
 
-void NCCL_Reduce::ErrorCheck(std::string op_name, ncclResult_t nccl_result) {
+void NCCL_Reduce::ErrorCheck(const char* op_name, ncclResult_t nccl_result) {
   if (nccl_result != ncclSuccess) {
     ncclCommAbort(nccl_comm_);
     throw std::runtime_error(std::string(op_name) +
@@ -244,5 +244,4 @@ void NCCL_Reduce::UnfuseLayerData(unsigned char *layers_data,
   }
 }
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

@@ -34,9 +34,7 @@
     }                                                                          \
   } while (0)
 
-namespace cgx {
-namespace common {
-namespace gpu {
+namespace cgx::common::gpu {
 const bool VECTORIZE_COMPRESS = false;
 const bool VECTORIZE_DECOMPRESS = false;
 
@@ -620,6 +618,4 @@ template void HIP_dequantize_maxmin<Half, false>(const unsigned char *input_data
                                                  int bucket_size,
                                                  hipStream_t stream);
 
-} // namespace gpu
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::gpu

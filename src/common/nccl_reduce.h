@@ -21,8 +21,7 @@
 #include "reducer.h"
 #include <nccl.h>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class NCCL_Reduce : public Reducer {
 public:
@@ -40,7 +39,7 @@ public:
 
 private:
   void Init(void *comm);
-  void ErrorCheck(std::string op_name, ncclResult_t nccl_result);
+  void ErrorCheck(const char* op_name, ncclResult_t nccl_result);
   void FuseLayerData(unsigned char **layers_data, std::vector<Layer> &layers,
                      int num_elements, int global_offset, gpuStream_t stream);
   void UnfuseLayerData(unsigned char *layers_data, std::vector<Layer> &layers,
@@ -57,5 +56,4 @@ private:
   ncclComm_t nccl_comm_;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

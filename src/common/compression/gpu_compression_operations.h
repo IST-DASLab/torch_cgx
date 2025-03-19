@@ -30,9 +30,7 @@
 #include "../gpu_context.h"
 #include "gpu_def.h"
 
-namespace cgx {
-namespace common {
-namespace gpu {
+namespace cgx::common::gpu {
 
 constexpr int MIN(int a, int b) { return (a > b) ? b : a; }
 
@@ -67,6 +65,4 @@ void float2half(float* input, Half* output, int numel, gpuStream_t stream);
 
 size_t get_curand_array_size(int num_elems);
 
-} // namespace gpu
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::gpu

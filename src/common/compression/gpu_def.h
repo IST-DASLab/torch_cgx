@@ -18,13 +18,12 @@
  */
 
 #pragma once
-namespace cgx {
-namespace common {
-namespace gpu {
-using uint64_t = unsigned long long int;
+#include <cstdint>
+
+namespace cgx::common::gpu {
 
 struct xorshift128p_state {
-  uint64_t a, b;
+  std::uint64_t a, b;
 };
 
 using Half = __half;
@@ -87,6 +86,4 @@ struct TypeToVectorType<Half> {
   static const int num_values = 8;
 };
 
-} // namespace gpu
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common::gpu

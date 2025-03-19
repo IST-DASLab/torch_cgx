@@ -21,21 +21,21 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <utility>
 
 #include "buffer.h"
 #include "compression/gpu_compression_operations.h"
 #include "gpu_context.h"
 #include "layer.h"
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 const int COMPRESSION_DEFAULT_BUCKET_SIZE = 512;
 
 struct CompressionLayerConfig {
   int quantization_bits;
   int bucket_size;
   bool skip_incomplete_buckets;
-  bool operator==(const CompressionLayerConfig &b) {
+  bool operator==(const CompressionLayerConfig &b) const {
     return quantization_bits == b.quantization_bits and
            bucket_size == b.bucket_size and
            skip_incomplete_buckets == b.skip_incomplete_buckets;
@@ -44,7 +44,7 @@ struct CompressionLayerConfig {
 
 class Compressor {
 public:
-  Compressor(std::shared_ptr<GPUContext> gpu_context);
+  explicit Compressor(std::shared_ptr<GPUContext> gpu_context);
   virtual ~Compressor() = default;
   // Returns size of buffer to allocate for usage in compress (in bytes). We
   // assume that no compression will be done in-place.
@@ -144,8 +144,8 @@ protected:
 
 class DummyCompressor : public Compressor {
 public:
-  DummyCompressor(std::shared_ptr<GPUContext> gpu_context)
-      : Compressor(gpu_context) {}
+  explicit DummyCompressor(std::shared_ptr<GPUContext> gpu_context)
+      : Compressor(std::move(gpu_context)) {}
 
   size_t CompressBuffer(unsigned char *input, unsigned char *output,
                         unsigned char *feedback, int num_elems,
@@ -163,8 +163,8 @@ public:
 
 class MaxMinQuantizer : public Quantizer {
 public:
-  MaxMinQuantizer(std::shared_ptr<GPUContext> gpu_context)
-      : Quantizer(gpu_context) {}
+  explicit MaxMinQuantizer(std::shared_ptr<GPUContext> gpu_context)
+      : Quantizer(std::move(gpu_context)) {}
 
   size_t CompressBuffer(unsigned char *input, unsigned char *output,
                         unsigned char *feedback, int num_elems,
@@ -178,8 +178,7 @@ public:
   size_t BufferSize(int num_elems, size_t element_size,
                     const CompressionLayerConfig &config) final;
   bool isEnabled(const Layer &tensor) override;
-  virtual void Init(int elem_size, gpuStream_t stream);
+  void Init(int elem_size, gpuStream_t stream) override;
 };
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common

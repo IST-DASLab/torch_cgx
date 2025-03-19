@@ -62,15 +62,14 @@ using gpuIpcEventHandle_t = hipIpcEventHandle_t;
 #include <torch/torch.h>
 #endif
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class GPUContext {
 public:
   GPUContext();
   ~GPUContext();
 
-  void ErrorCheck(std::string op_name, gpuError_t gpu_result);
+  void ErrorCheck(const char* op_name, gpuError_t gpu_result);
 
   void EventCreate(gpuEvent_t* event);
   void EventDestroy(gpuEvent_t& event);
@@ -99,5 +98,4 @@ private:
   class impl;
   std::unique_ptr<impl> pimpl;
 };
-} // namespace common
-}// namespace cgx
+} // namespace cgx::common

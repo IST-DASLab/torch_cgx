@@ -19,12 +19,11 @@
 
 #include <thread>
 
-namespace cgx {
-namespace common {
+namespace cgx::common {
 
 class GPUContext::impl {
 public:
-  void ErrorCheck(std::string op_name, cudaError_t cuda_result) {
+  void ErrorCheck(const char* op_name, cudaError_t cuda_result) {
     if (cuda_result != cudaSuccess) {
       throw std::logic_error(
           std::string(op_name) + " failed: " + cudaGetErrorString(cuda_result));
@@ -139,5 +138,4 @@ private:
 
 #include "gpu_context_impl.cc"
 
-} // namespace common
-} // namespace cgx
+} // namespace cgx::common
