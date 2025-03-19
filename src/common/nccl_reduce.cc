@@ -41,7 +41,7 @@ NCCL_Reduce::NCCL_Reduce(std::shared_ptr<GPUContext> gpu_context,
   gradients_recv_ = gradients_send_ + chunk_size * world_size;
 }
 
-void NCCL_Reduce::ErrorCheck(std::string op_name, ncclResult_t nccl_result) {
+void NCCL_Reduce::ErrorCheck(const char* op_name, ncclResult_t nccl_result) {
   if (nccl_result != ncclSuccess) {
     ncclCommAbort(nccl_comm_);
     throw std::runtime_error(std::string(op_name) +

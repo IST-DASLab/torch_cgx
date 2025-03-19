@@ -23,7 +23,7 @@ namespace cgx::common {
 
 class GPUContext::impl {
 public:
-  void ErrorCheck(std::string op_name, hipError_t hip_result) {
+  void ErrorCheck(const char* op_name, hipError_t hip_result) {
     if (hip_result != hipSuccess) {
       throw std::logic_error(
           std::string(op_name) + " failed: " + hipGetErrorString(hip_result));

@@ -69,7 +69,7 @@ public:
   GPUContext();
   ~GPUContext();
 
-  void ErrorCheck(std::string op_name, gpuError_t gpu_result);
+  void ErrorCheck(const char* op_name, gpuError_t gpu_result);
 
   void EventCreate(gpuEvent_t* event);
   void EventDestroy(gpuEvent_t& event);

@@ -21,7 +21,7 @@
 GPUContext::GPUContext() : pimpl{new impl} {}
 GPUContext::~GPUContext() = default;
 
-void GPUContext::ErrorCheck(std::string op_name, gpuError_t gpu_result) {
+void GPUContext::ErrorCheck(const char* op_name, gpuError_t gpu_result) {
   pimpl->ErrorCheck(op_name, gpu_result);
 }
 

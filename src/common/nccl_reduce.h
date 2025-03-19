@@ -39,7 +39,7 @@ public:
 
 private:
   void Init(void *comm);
-  void ErrorCheck(std::string op_name, ncclResult_t nccl_result);
+  void ErrorCheck(const char* op_name, ncclResult_t nccl_result);
   void FuseLayerData(unsigned char **layers_data, std::vector<Layer> &layers,
                      int num_elements, int global_offset, gpuStream_t stream);
   void UnfuseLayerData(unsigned char *layers_data, std::vector<Layer> &layers,
